@@ -266,8 +266,11 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                       size="sm" 
                       className="flex-1"
                       onClick={() => {
+                        console.log('Create listings button clicked!');
+                        console.log('Setting selected item:', item);
                         setSelectedItem(item);
                         setIsCreateListingModalOpen(true);
+                        console.log('Modal should be open now');
                       }}
                     >
                       Create Listing
