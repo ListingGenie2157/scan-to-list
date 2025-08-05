@@ -196,7 +196,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
@@ -207,7 +207,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 flex-1 overflow-y-auto">
           {/* Upload Area */}
           <div
             className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
@@ -294,7 +294,10 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
             </div>
           )}
 
-          {/* Action Buttons */}
+        </div>
+
+        {/* Action Buttons - Always visible at bottom */}
+        <div className="border-t pt-4 mt-4 bg-background">
           <div className="flex gap-3 pt-4">
             <Button
               onClick={startProcessing}
