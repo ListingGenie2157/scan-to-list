@@ -1,0 +1,172 @@
+import { useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { BookOpen, DollarSign } from "lucide-react";
+
+interface InventoryItem {
+  id: string;
+  title: string | null;
+  author: string | null;
+  status: string;
+  suggested_category: string | null;
+  suggested_price: number | null;
+  created_at: string;
+  photos: {
+    public_url: string | null;
+  } | null;
+  confidence_score: number | null;
+}
+
+interface CreateListingModalProps {
+  item: InventoryItem | null;
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function CreateListingModal({ item, isOpen, onClose }: CreateListingModalProps) {
+  const [listingData, setListingData] = useState({
+    title: item?.title || "",
+    price: item?.suggested_price?.toString() || "",
+    description: "",
+    condition: "good",
+    category: item?.suggested_category || "book"
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    console.log('Creating listing for item:', item?.id, 'with data:', listingData);
+    // TODO: Implement actual listing creation
+    onClose();
+  };
+
+  if (!item) return null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Create Listing</DialogTitle>
+        </DialogHeader>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Item Preview */}
+          <div className="space-y-4">
+            <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+              {item.photos?.public_url ? (
+                <img 
+                  src={item.photos.public_url} 
+                  alt={item.title || 'Item photo'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <BookOpen className="w-8 h-8 text-muted-foreground" />
+              )}
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="font-medium">Original Details</h3>
+              <p className="text-sm text-muted-foreground">
+                <strong>Title:</strong> {item.title || 'Unknown'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                <strong>Author:</strong> {item.author || 'Unknown'}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                <strong>Suggested Price:</strong> ${item.suggested_price?.toFixed(2) || '0.00'}
+              </p>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline">{item.suggested_category}</Badge>
+                <Badge variant="outline" className="bg-success/10 text-success border-success/20">
+                  {item.confidence_score || 0}% confidence
+                </Badge>
+              </div>
+            </div>
+          </div>
+
+          {/* Listing Form */}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Listing Title</Label>
+              <Input
+                id="title"
+                value={listingData.title}
+                onChange={(e) => setListingData({...listingData, title: e.target.value})}
+                placeholder="Enter listing title"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="price">Price ($)</Label>
+              <Input
+                id="price"
+                type="number"
+                step="0.01"
+                value={listingData.price}
+                onChange={(e) => setListingData({...listingData, price: e.target.value})}
+                placeholder="0.00"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="condition">Condition</Label>
+              <Select value={listingData.condition} onValueChange={(value) => setListingData({...listingData, condition: value})}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="like-new">Like New</SelectItem>
+                  <SelectItem value="good">Good</SelectItem>
+                  <SelectItem value="fair">Fair</SelectItem>
+                  <SelectItem value="poor">Poor</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Select value={listingData.category} onValueChange={(value) => setListingData({...listingData, category: value})}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="book">Book</SelectItem>
+                  <SelectItem value="magazine">Magazine</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={listingData.description}
+                onChange={(e) => setListingData({...listingData, description: e.target.value})}
+                placeholder="Describe the item condition, special features, etc."
+                rows={4}
+              />
+            </div>
+
+            <div className="flex gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={onClose} className="flex-1">
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1">
+                <DollarSign className="w-4 h-4 mr-2" />
+                Create Listing
+              </Button>
+            </div>
+          </form>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}

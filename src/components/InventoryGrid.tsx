@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { CreateListingModal } from "@/components/CreateListingModal";
 
 interface InventoryItem {
   id: string;
@@ -33,6 +34,8 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
+  const [isCreateListingModalOpen, setIsCreateListingModalOpen] = useState(false);
 
   useImperativeHandle(ref, () => ({
     refreshInventory: fetchInventory
@@ -263,8 +266,8 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                       size="sm" 
                       className="flex-1"
                       onClick={() => {
-                        console.log('Create Listing button clicked for item:', item.id);
-                        // TODO: Implement create listing functionality
+                        setSelectedItem(item);
+                        setIsCreateListingModalOpen(true);
                       }}
                     >
                       Create Listing
@@ -291,6 +294,15 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           </CardContent>
         </Card>
       )}
+
+      <CreateListingModal 
+        item={selectedItem}
+        isOpen={isCreateListingModalOpen}
+        onClose={() => {
+          setIsCreateListingModalOpen(false);
+          setSelectedItem(null);
+        }}
+      />
     </div>
   );
 });
