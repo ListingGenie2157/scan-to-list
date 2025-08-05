@@ -8,6 +8,7 @@ import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, Book
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { CreateListingModal } from "@/components/CreateListingModal";
+import { BulkListingModal } from "@/components/BulkListingModal";
 
 interface InventoryItem {
   id: string;
@@ -22,6 +23,8 @@ interface InventoryItem {
   condition_assessment: string | null;
   genre: string | null;
   isbn: string | null;
+  issue_number: string | null;
+  issue_date: string | null;
   created_at: string;
   photos: {
     public_url: string | null;
@@ -42,6 +45,8 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
   const [isCreateListingModalOpen, setIsCreateListingModalOpen] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<string[]>([]);
+  const [isBulkListingModalOpen, setIsBulkListingModalOpen] = useState(false);
 
   useImperativeHandle(ref, () => ({
     refreshInventory: fetchInventory
@@ -70,6 +75,8 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           condition_assessment,
           genre,
           isbn,
+          issue_number,
+          issue_date,
           created_at,
           confidence_score,
           photos (
@@ -185,8 +192,13 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           <Button variant="outline" size="sm">
             Export Selected
           </Button>
-          <Button variant="outline" size="sm">
-            Bulk Actions
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setIsBulkListingModalOpen(true)}
+            disabled={filteredInventory.length === 0}
+          >
+            Bulk Create Listings
           </Button>
         </div>
       </div>
@@ -317,6 +329,12 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           setIsCreateListingModalOpen(false);
           setSelectedItem(null);
         }}
+      />
+
+      <BulkListingModal 
+        items={filteredInventory}
+        isOpen={isBulkListingModalOpen}
+        onClose={() => setIsBulkListingModalOpen(false)}
       />
     </div>
   );

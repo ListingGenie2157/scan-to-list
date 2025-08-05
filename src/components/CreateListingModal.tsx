@@ -23,6 +23,8 @@ interface InventoryItem {
   condition_assessment: string | null;
   genre: string | null;
   isbn: string | null;
+  issue_number: string | null;
+  issue_date: string | null;
   created_at: string;
   photos: {
     public_url: string | null;
@@ -62,7 +64,9 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
             condition: item.condition_assessment || 'good',
             category: item.suggested_category || 'book',
             isbn: item.isbn,
-            genre: item.genre
+            genre: item.genre,
+            issue_number: item.issue_number,
+            issue_date: item.issue_date
           }
         }
       });

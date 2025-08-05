@@ -20,27 +20,34 @@ serve(async (req) => {
       throw new Error('Item data is required');
     }
 
-    const { title, author, publisher, publication_year, condition, category, isbn, genre } = itemData;
+    const { title, author, publisher, publication_year, condition, category, isbn, genre, issue_number, issue_date } = itemData;
 
     // Create a detailed prompt for eBay listing optimization
-    const prompt = `Create an SEO-optimized eBay listing for this item:
+    const isMagazine = genre?.toLowerCase().includes('magazine') || category?.toLowerCase().includes('magazine');
+    
+    const prompt = `Create an SEO-optimized eBay listing for this ${isMagazine ? 'magazine' : 'item'}:
 
 Title: ${title || 'Unknown'}
-Author: ${author || 'Unknown'}
+${isMagazine ? 'Issue Number:' : 'Author:'} ${isMagazine ? (issue_number || 'Unknown') : (author || 'Unknown')}
 Publisher: ${publisher || 'Unknown'}
-Year: ${publication_year || 'Unknown'}
+${isMagazine ? 'Issue Date:' : 'Year:'} ${isMagazine ? (issue_date || publication_year || 'Unknown') : (publication_year || 'Unknown')}
 Condition: ${condition || 'Good'}
-Category: ${category || 'Book'}
+Category: ${category || (isMagazine ? 'Magazine' : 'Book')}
 ISBN: ${isbn || 'Not available'}
 Genre: ${genre || 'Unknown'}
 
 Please generate:
 1. An eBay title (max 80 characters) that includes key searchable terms and follows eBay best practices
+   ${isMagazine ? '- For magazines: Include magazine name, issue number/date, and year for maximum searchability' : '- For books: Include title, author, and key descriptive terms'}
+   - Use relevant keywords that collectors and buyers search for
+   - Include condition if space allows
 2. A compelling description (200-300 words) that:
    - Highlights key selling points
-   - Includes condition details
+   ${isMagazine ? '- Mentions issue details and any special features (cover stories, interviews, etc.)' : '- Includes author credentials and book highlights'}
+   - Includes condition details and any flaws
    - Uses relevant keywords for eBay search
    - Has a professional, trustworthy tone
+   - Appeals to collectors and enthusiasts
    - Mentions shipping and return policy basics
 
 Format your response as JSON with "title" and "description" fields.`;
