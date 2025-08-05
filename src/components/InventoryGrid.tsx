@@ -247,10 +247,26 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
                   {/* Actions */}
                   <div className="flex gap-2 pt-2">
-                    <Button variant="outline" size="sm" className="flex-1">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => {
+                        console.log('Edit button clicked for item:', item.id);
+                        // TODO: Implement edit functionality
+                      }}
+                    >
                       Edit
                     </Button>
-                    <Button variant="default" size="sm" className="flex-1">
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => {
+                        console.log('Create Listing button clicked for item:', item.id);
+                        // TODO: Implement create listing functionality
+                      }}
+                    >
                       Create Listing
                     </Button>
                   </div>
