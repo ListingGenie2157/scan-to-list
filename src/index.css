@@ -73,7 +73,16 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
-  }
+}
+
+/* Barcode Scanner Styles */
+.barcode-scanner-active {
+  visibility: hidden;
+}
+
+.barcode-scanner-active .barcode-scanner {
+  visibility: visible;
+}
 
   .dark {
     --background: 222.2 84% 4.9%;

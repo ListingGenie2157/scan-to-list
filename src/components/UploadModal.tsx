@@ -7,6 +7,8 @@ import { Upload, Camera, X, FileImage, CheckCircle, AlertTriangle } from "lucide
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { BarcodeScanner } from "@capacitor-community/barcode-scanner";
+import { Capacitor } from "@capacitor/core";
 
 interface UploadModalProps {
   open: boolean;
@@ -64,6 +66,82 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
 
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleBarcodeScan = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      toast({
+        title: "Not Available",
+        description: "Barcode scanning is only available on mobile devices",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    try {
+      // Check permissions
+      const status = await BarcodeScanner.checkPermission({ force: true });
+      
+      if (!status.granted) {
+        toast({
+          title: "Permission Denied",
+          description: "Camera permission is required for barcode scanning",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      setIsProcessing(true);
+      
+      // Hide background elements
+      document.body.classList.add('barcode-scanner-active');
+      
+      // Start scanning
+      const result = await BarcodeScanner.startScan();
+      
+      if (result.hasContent) {
+        toast({
+          title: "Barcode Scanned",
+          description: "Looking up product information...",
+        });
+
+        // Call our edge function to look up product information
+        const { data, error } = await supabase.functions.invoke('lookup-product', {
+          body: { barcode: result.content }
+        });
+
+        if (error) {
+          throw error;
+        }
+
+        if (data.success) {
+          toast({
+            title: "Product Added",
+            description: `Added: ${data.productInfo.title || 'Product'}`,
+          });
+          
+          onUploadSuccess?.();
+          onOpenChange(false);
+        } else {
+          toast({
+            title: "Product Not Found",
+            description: "Could not find product information for this barcode",
+            variant: "destructive"
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Barcode scanning error:', error);
+      toast({
+        title: "Scanning Error",
+        description: "Failed to scan barcode. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessing(false);
+      document.body.classList.remove('barcode-scanner-active');
+      BarcodeScanner.stopScan();
+    }
   };
 
   const startProcessing = async () => {
@@ -283,6 +361,22 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
               </Button>
             </div>
           </div>
+
+          {/* Barcode Scanner - Only show on mobile */}
+          {Capacitor.isNativePlatform() && (
+            <div className="text-center pt-4 border-t">
+              <p className="text-sm text-muted-foreground mb-3">Or scan a barcode</p>
+              <Button
+                onClick={handleBarcodeScan}
+                variant="outline"
+                className="w-full"
+                disabled={isProcessing}
+              >
+                <Camera className="w-4 h-4 mr-2" />
+                Scan Barcode (Books & Magazines)
+              </Button>
+            </div>
+          )}
 
           {/* Uploaded Files */}
           {uploadedFiles.length > 0 && (
