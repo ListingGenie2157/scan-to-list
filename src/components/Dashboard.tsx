@@ -79,7 +79,10 @@ export const Dashboard = () => {
               <Button 
                 variant="upload" 
                 size="default"
-                onClick={() => setShowUploadModal(true)}
+                onClick={() => {
+                  console.log('Upload button clicked!');
+                  setShowUploadModal(true);
+                }}
                 className="shadow-elevated"
               >
                 <Upload className="w-5 h-5" />
@@ -171,7 +174,10 @@ export const Dashboard = () => {
                   <Button 
                     variant="gradient" 
                     size="lg" 
-                    onClick={() => setShowUploadModal(true)}
+                    onClick={() => {
+                      console.log('Quick action upload button clicked!');
+                      setShowUploadModal(true);
+                    }}
                     className="h-20 flex-col"
                   >
                     <Upload className="w-6 h-6 mb-2" />
