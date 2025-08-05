@@ -1,103 +1,80 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface InventoryItem {
   id: string;
-  title: string;
-  author: string;
-  status: "pending" | "processed" | "listed" | "sold";
-  category: "book" | "magazine";
-  estimatedValue: number;
-  dateAdded: string;
-  imageUrl: string;
-  confidence: number;
+  title: string | null;
+  author: string | null;
+  status: string;
+  suggested_category: string | null;
+  suggested_price: number | null;
+  created_at: string;
+  photos: {
+    public_url: string | null;
+  } | null;
+  confidence_score: number | null;
 }
 
 export const InventoryGrid = () => {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock inventory data
-  const mockInventory: InventoryItem[] = [
-    {
-      id: "1",
-      title: "Harry Potter and the Philosopher's Stone",
-      author: "J.K. Rowling",
-      status: "processed",
-      category: "book",
-      estimatedValue: 45.99,
-      dateAdded: "2024-01-10",
-      imageUrl: "/placeholder.svg",
-      confidence: 95
-    },
-    {
-      id: "2", 
-      title: "National Geographic - January 1985",
-      author: "National Geographic Society",
-      status: "listed",
-      category: "magazine",
-      estimatedValue: 12.50,
-      dateAdded: "2024-01-09",
-      imageUrl: "/placeholder.svg",
-      confidence: 88
-    },
-    {
-      id: "3",
-      title: "The Great Gatsby",
-      author: "F. Scott Fitzgerald",
-      status: "pending",
-      category: "book", 
-      estimatedValue: 28.75,
-      dateAdded: "2024-01-08",
-      imageUrl: "/placeholder.svg",
-      confidence: 92
-    },
-    {
-      id: "4",
-      title: "Time Magazine - December 1969",
-      author: "Time Inc.",
-      status: "sold",
-      category: "magazine",
-      estimatedValue: 25.00,
-      dateAdded: "2024-01-07",
-      imageUrl: "/placeholder.svg",
-      confidence: 90
-    },
-    {
-      id: "5",
-      title: "To Kill a Mockingbird",
-      author: "Harper Lee",
-      status: "processed",
-      category: "book",
-      estimatedValue: 18.99,
-      dateAdded: "2024-01-06",
-      imageUrl: "/placeholder.svg",
-      confidence: 97
-    },
-    {
-      id: "6",
-      title: "Popular Science - March 1977",
-      author: "Popular Science",
-      status: "pending",
-      category: "magazine",
-      estimatedValue: 8.50,
-      dateAdded: "2024-01-05",
-      imageUrl: "/placeholder.svg",
-      confidence: 85
+  useEffect(() => {
+    if (user) {
+      fetchInventory();
     }
-  ];
+  }, [user]);
 
-  const filteredInventory = mockInventory.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.author.toLowerCase().includes(searchTerm.toLowerCase());
+  const fetchInventory = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_items')
+        .select(`
+          id,
+          title,
+          author,
+          status,
+          suggested_category,
+          suggested_price,
+          created_at,
+          confidence_score,
+          photos (
+            public_url
+          )
+        `)
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching inventory:', error);
+      } else {
+        setInventory(data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching inventory:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredInventory = inventory.filter(item => {
+    const title = item.title || item.suggested_category || 'Untitled';
+    const author = item.author || '';
+    const matchesSearch = title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         author.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || item.status === statusFilter;
-    const matchesCategory = categoryFilter === "all" || item.category === categoryFilter;
+    const matchesCategory = categoryFilter === "all" || item.suggested_category === categoryFilter;
     
     return matchesSearch && matchesStatus && matchesCategory;
   });
@@ -179,7 +156,7 @@ export const InventoryGrid = () => {
       {/* Results Summary */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          Showing {filteredInventory.length} of {mockInventory.length} items
+          Showing {filteredInventory.length} of {inventory.length} items
         </p>
         <div className="flex gap-2">
           <Button variant="outline" size="sm">
@@ -192,56 +169,89 @@ export const InventoryGrid = () => {
       </div>
 
       {/* Inventory Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredInventory.map((item) => (
-          <Card key={item.id} className="shadow-card hover:shadow-elevated transition-shadow cursor-pointer">
-            <CardContent className="p-4">
-              <div className="space-y-3">
-                {/* Image */}
-                <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center">
-                  <BookOpen className="w-8 h-8 text-muted-foreground" />
-                </div>
-
-                {/* Content */}
-                <div className="space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-medium text-sm leading-tight line-clamp-2">{item.title}</h3>
-                    {getCategoryIcon(item.category)}
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <Card key={i} className="shadow-card">
+              <CardContent className="p-4">
+                <div className="space-y-3 animate-pulse">
+                  <div className="aspect-[3/4] bg-muted rounded-lg" />
+                  <div className="space-y-2">
+                    <div className="h-4 bg-muted rounded w-3/4" />
+                    <div className="h-3 bg-muted rounded w-1/2" />
+                    <div className="h-4 bg-muted rounded w-1/3" />
                   </div>
-                  
-                  <p className="text-sm text-muted-foreground line-clamp-1">{item.author}</p>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-lg">${item.estimatedValue}</span>
-                    <div className="flex items-center gap-1">
-                      {getStatusIcon(item.status)}
-                      {getStatusBadge(item.status)}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredInventory.map((item) => (
+            <Card key={item.id} className="shadow-card hover:shadow-elevated transition-shadow cursor-pointer">
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  {/* Image */}
+                  <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+                    {item.photos?.public_url ? (
+                      <img 
+                        src={item.photos.public_url} 
+                        alt={item.title || 'Item photo'}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <BookOpen className="w-8 h-8 text-muted-foreground" />
+                    )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="font-medium text-sm leading-tight line-clamp-2">
+                        {item.title || item.suggested_category || 'Untitled Item'}
+                      </h3>
+                      {getCategoryIcon(item.suggested_category || 'book')}
+                    </div>
+                    
+                    <p className="text-sm text-muted-foreground line-clamp-1">
+                      {item.author || 'Unknown Author'}
+                    </p>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-lg">
+                        ${item.suggested_price?.toFixed(2) || '0.00'}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {getStatusIcon(item.status)}
+                        {getStatusBadge(item.status)}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Added {new Date(item.created_at).toLocaleDateString()}</span>
+                      <span className="flex items-center gap-1">
+                        <div className="w-2 h-2 bg-success rounded-full" />
+                        {item.confidence_score || 0}% confidence
+                      </span>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Added {new Date(item.dateAdded).toLocaleDateString()}</span>
-                    <span className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-success rounded-full" />
-                      {item.confidence}% confidence
-                    </span>
+                  {/* Actions */}
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" size="sm" className="flex-1">
+                      Edit
+                    </Button>
+                    <Button variant="default" size="sm" className="flex-1">
+                      Create Listing
+                    </Button>
                   </div>
                 </div>
-
-                {/* Actions */}
-                <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    Edit
-                  </Button>
-                  <Button variant="default" size="sm" className="flex-1">
-                    Create Listing
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {filteredInventory.length === 0 && (
         <Card className="shadow-card">
