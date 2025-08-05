@@ -193,7 +193,15 @@ export const Dashboard = () => {
                     <Upload className="w-6 h-6 mb-2" />
                     Upload New Photos
                   </Button>
-                  <Button variant="outline" size="lg" className="h-20 flex-col">
+                  <Button 
+                    variant="outline" 
+                    size="lg" 
+                    className="h-20 flex-col"
+                    onClick={() => {
+                      console.log('Create listings button clicked!');
+                      setActiveTab("inventory");
+                    }}
+                  >
                     <Package className="w-6 h-6 mb-2" />
                     Create Listings
                   </Button>
