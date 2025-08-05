@@ -14,7 +14,367 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bundles: {
+        Row: {
+          bundle_name: string
+          bundle_price: number | null
+          bundle_type: string | null
+          created_at: string | null
+          id: string
+          total_items: number | null
+          user_id: string | null
+        }
+        Insert: {
+          bundle_name: string
+          bundle_price?: number | null
+          bundle_type?: string | null
+          created_at?: string | null
+          id?: string
+          total_items?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          bundle_name?: string
+          bundle_price?: number | null
+          bundle_type?: string | null
+          created_at?: string | null
+          id?: string
+          total_items?: number | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bundles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      csv_exports: {
+        Row: {
+          created_at: string | null
+          download_url: string | null
+          expires_at: string | null
+          file_name: string
+          id: string
+          item_count: number
+          storage_path: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          download_url?: string | null
+          expires_at?: string | null
+          file_name: string
+          id?: string
+          item_count: number
+          storage_path?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          download_url?: string | null
+          expires_at?: string | null
+          file_name?: string
+          id?: string
+          item_count?: number
+          storage_path?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "csv_exports_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_items: {
+        Row: {
+          author: string | null
+          bundle_id: string | null
+          condition_assessment: string | null
+          confidence_score: number | null
+          created_at: string | null
+          description: string | null
+          ebay_category_id: number | null
+          edition_info: string | null
+          extracted_text: Json | null
+          format: string | null
+          genre: string | null
+          id: string
+          is_bundle_parent: boolean | null
+          isbn: string | null
+          issue_date: string | null
+          issue_number: string | null
+          listed_at: string | null
+          photo_id: string | null
+          publication_year: number | null
+          publisher: string | null
+          sold_at: string | null
+          status: string | null
+          suggested_category: string | null
+          suggested_price: number | null
+          suggested_title: string | null
+          title: string | null
+          topic: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          author?: string | null
+          bundle_id?: string | null
+          condition_assessment?: string | null
+          confidence_score?: number | null
+          created_at?: string | null
+          description?: string | null
+          ebay_category_id?: number | null
+          edition_info?: string | null
+          extracted_text?: Json | null
+          format?: string | null
+          genre?: string | null
+          id?: string
+          is_bundle_parent?: boolean | null
+          isbn?: string | null
+          issue_date?: string | null
+          issue_number?: string | null
+          listed_at?: string | null
+          photo_id?: string | null
+          publication_year?: number | null
+          publisher?: string | null
+          sold_at?: string | null
+          status?: string | null
+          suggested_category?: string | null
+          suggested_price?: number | null
+          suggested_title?: string | null
+          title?: string | null
+          topic?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          author?: string | null
+          bundle_id?: string | null
+          condition_assessment?: string | null
+          confidence_score?: number | null
+          created_at?: string | null
+          description?: string | null
+          ebay_category_id?: number | null
+          edition_info?: string | null
+          extracted_text?: Json | null
+          format?: string | null
+          genre?: string | null
+          id?: string
+          is_bundle_parent?: boolean | null
+          isbn?: string | null
+          issue_date?: string | null
+          issue_number?: string | null
+          listed_at?: string | null
+          photo_id?: string | null
+          publication_year?: number | null
+          publisher?: string | null
+          sold_at?: string | null
+          status?: string | null
+          suggested_category?: string | null
+          suggested_price?: number | null
+          suggested_title?: string | null
+          title?: string | null
+          topic?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_bundle_id"
+            columns: ["bundle_id"]
+            isOneToOne: false
+            referencedRelation: "bundles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_photo_id_fkey"
+            columns: ["photo_id"]
+            isOneToOne: false
+            referencedRelation: "photos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_items_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_queues: {
+        Row: {
+          created_at: string | null
+          id: string
+          item_id: string | null
+          priority_score: number | null
+          queue_date: string
+          status: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          item_id?: string | null
+          priority_score?: number | null
+          queue_date: string
+          status?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          item_id?: string | null
+          priority_score?: number | null
+          queue_date?: string
+          status?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_queues_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listing_queues_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      photos: {
+        Row: {
+          batch_id: string | null
+          file_name: string
+          file_size: number | null
+          id: string
+          public_url: string | null
+          storage_path: string
+          uploaded_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          batch_id?: string | null
+          file_name: string
+          file_size?: number | null
+          id?: string
+          public_url?: string | null
+          storage_path: string
+          uploaded_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          batch_id?: string | null
+          file_name?: string
+          file_size?: number | null
+          id?: string
+          public_url?: string | null
+          storage_path?: string
+          uploaded_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "photos_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "processing_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "photos_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      processing_batches: {
+        Row: {
+          created_at: string | null
+          id: string
+          processed_images: number | null
+          status: string | null
+          total_images: number
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          processed_images?: number | null
+          status?: string | null
+          total_images: number
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          processed_images?: number | null
+          status?: string | null
+          total_images?: number
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processing_batches_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          images_used_this_month: number | null
+          monthly_image_limit: number | null
+          subscription_tier: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          images_used_this_month?: number | null
+          monthly_image_limit?: number | null
+          subscription_tier?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          images_used_this_month?: number | null
+          monthly_image_limit?: number | null
+          subscription_tier?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

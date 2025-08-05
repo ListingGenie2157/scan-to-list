@@ -5,6 +5,8 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Upload, Camera, X, FileImage, CheckCircle, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 interface UploadModalProps {
   open: boolean;
@@ -18,6 +20,7 @@ export const UploadModal = ({ open, onOpenChange }: UploadModalProps) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -63,28 +66,88 @@ export const UploadModal = ({ open, onOpenChange }: UploadModalProps) => {
   };
 
   const startProcessing = async () => {
-    if (uploadedFiles.length === 0) return;
+    if (uploadedFiles.length === 0 || !user) return;
     
     setIsProcessing(true);
     setProcessingProgress(0);
 
-    // Simulate processing with progress
-    const interval = setInterval(() => {
-      setProcessingProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsProcessing(false);
-          toast({
-            title: "Processing complete!",
-            description: `${uploadedFiles.length} items added to inventory`,
-          });
-          setUploadedFiles([]);
-          onOpenChange(false);
-          return 100;
+    try {
+      const totalFiles = uploadedFiles.length;
+      
+      for (let i = 0; i < totalFiles; i++) {
+        const file = uploadedFiles[i];
+        
+        // Update progress
+        setProcessingProgress(Math.round((i / totalFiles) * 90));
+        
+        // Upload to storage
+        const fileName = `${user.id}/${Date.now()}-${file.name}`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('photos')
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+          continue;
         }
-        return prev + 10;
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('photos')
+          .getPublicUrl(fileName);
+
+        // Create photo record
+        const { data: photoData, error: photoError } = await supabase
+          .from('photos')
+          .insert({
+            user_id: user.id,
+            file_name: file.name,
+            storage_path: uploadData.path,
+            public_url: publicUrl,
+            file_size: file.size
+          })
+          .select()
+          .single();
+
+        if (photoError) {
+          console.error('Photo record error:', photoError);
+          continue;
+        }
+
+        // Create inventory item
+        const { error: inventoryError } = await supabase
+          .from('inventory_items')
+          .insert({
+            user_id: user.id,
+            photo_id: photoData.id,
+            status: 'photographed'
+          });
+
+        if (inventoryError) {
+          console.error('Inventory error:', inventoryError);
+        }
+      }
+
+      setProcessingProgress(100);
+      setIsProcessing(false);
+      
+      toast({
+        title: "Processing complete!",
+        description: `${uploadedFiles.length} items added to inventory`,
       });
-    }, 500);
+      
+      setUploadedFiles([]);
+      onOpenChange(false);
+      
+    } catch (error) {
+      console.error('Processing error:', error);
+      setIsProcessing(false);
+      toast({
+        title: "Error",
+        description: "Failed to process images. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const formatFileSize = (bytes: number) => {
