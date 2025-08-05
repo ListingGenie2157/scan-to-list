@@ -2,11 +2,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle } from "lucide-react";
+import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle, LogOut, User } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { UploadModal } from "./UploadModal";
 import { InventoryGrid } from "./InventoryGrid";
 
 export const Dashboard = () => {
+  const { user, signOut } = useAuth();
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "inventory">("overview");
 
@@ -62,6 +64,18 @@ export const Dashboard = () => {
               <p className="text-sm text-muted-foreground">AI-Powered Reseller Tool</p>
             </div>
             <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <User className="w-4 h-4" />
+                {user?.email}
+              </div>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={signOut}
+              >
+                <LogOut className="w-4 h-4" />
+                Sign Out
+              </Button>
               <Button 
                 variant="upload" 
                 size="default"
