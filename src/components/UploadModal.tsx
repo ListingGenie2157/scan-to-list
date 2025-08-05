@@ -362,19 +362,21 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
             </div>
           </div>
 
-          {/* Barcode Scanner */}
-          <div className="text-center pt-4 border-t">
-            <p className="text-sm text-muted-foreground mb-3">Or scan a barcode</p>
-            <Button
-              onClick={handleBarcodeScan}
-              variant="outline"
-              className="w-full"
-              disabled={isProcessing}
-            >
-              <Camera className="w-4 h-4 mr-2" />
-              {Capacitor.isNativePlatform() ? 'Scan Barcode (Books & Magazines)' : 'Scan Barcode (Mobile Only)'}
-            </Button>
-          </div>
+          {/* Barcode Scanner - Only show on mobile */}
+          {Capacitor.isNativePlatform() && (
+            <div className="text-center pt-4 border-t">
+              <p className="text-sm text-muted-foreground mb-3">Or scan a barcode</p>
+              <Button
+                onClick={handleBarcodeScan}
+                variant="outline"
+                className="w-full"
+                disabled={isProcessing}
+              >
+                <Camera className="w-4 h-4 mr-2" />
+                Scan Barcode (Books & Magazines)
+              </Button>
+            </div>
+          )}
 
           {/* Uploaded Files */}
           {uploadedFiles.length > 0 && (
