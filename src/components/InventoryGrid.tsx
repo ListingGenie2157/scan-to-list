@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,13 +22,21 @@ interface InventoryItem {
   confidence_score: number | null;
 }
 
-export const InventoryGrid = () => {
+export interface InventoryGridRef {
+  refreshInventory: () => void;
+}
+
+export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useImperativeHandle(ref, () => ({
+    refreshInventory: fetchInventory
+  }));
 
   useEffect(() => {
     if (user) {
@@ -269,4 +277,5 @@ export const InventoryGrid = () => {
       )}
     </div>
   );
-};
+});
+InventoryGrid.displayName = "InventoryGrid";

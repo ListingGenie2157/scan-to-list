@@ -11,9 +11,10 @@ import { useAuth } from "@/hooks/useAuth";
 interface UploadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onUploadSuccess?: () => void;
 }
 
-export const UploadModal = ({ open, onOpenChange }: UploadModalProps) => {
+export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModalProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [processingProgress, setProcessingProgress] = useState(0);
@@ -138,6 +139,9 @@ export const UploadModal = ({ open, onOpenChange }: UploadModalProps) => {
       
       setUploadedFiles([]);
       onOpenChange(false);
+      
+      // Call the success callback to refresh inventory and switch tabs
+      onUploadSuccess?.();
       
     } catch (error) {
       console.error('Processing error:', error);

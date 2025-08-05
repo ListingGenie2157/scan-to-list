@@ -1,16 +1,26 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle, LogOut, User } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { UploadModal } from "./UploadModal";
-import { InventoryGrid } from "./InventoryGrid";
+import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 
 export const Dashboard = () => {
   const { user, signOut } = useAuth();
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "inventory">("overview");
+  const inventoryGridRef = useRef<{ refreshInventory: () => void }>(null);
+
+  const handleUploadSuccess = () => {
+    // Switch to inventory tab and refresh the data
+    setActiveTab("inventory");
+    // Small delay to ensure tab switch happens first
+    setTimeout(() => {
+      inventoryGridRef.current?.refreshInventory();
+    }, 100);
+  };
 
   // Mock data for demonstration
   const stats = {
@@ -220,11 +230,15 @@ export const Dashboard = () => {
             </Card>
           </>
         ) : (
-          <InventoryGrid />
+          <InventoryGrid ref={inventoryGridRef} />
         )}
       </div>
 
-      <UploadModal open={showUploadModal} onOpenChange={setShowUploadModal} />
+      <UploadModal 
+        open={showUploadModal} 
+        onOpenChange={setShowUploadModal}
+        onUploadSuccess={handleUploadSuccess}
+      />
     </div>
   );
 };
