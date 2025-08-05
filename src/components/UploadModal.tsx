@@ -67,8 +67,12 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
   };
 
   const startProcessing = async () => {
-    if (uploadedFiles.length === 0 || !user) return;
+    if (uploadedFiles.length === 0 || !user) {
+      console.log('Cannot start processing: no files or no user', { files: uploadedFiles.length, user: !!user });
+      return;
+    }
     
+    console.log('Starting processing for', uploadedFiles.length, 'files');
     setIsProcessing(true);
     setProcessingProgress(0);
 
@@ -77,27 +81,40 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
       
       for (let i = 0; i < totalFiles; i++) {
         const file = uploadedFiles[i];
+        console.log(`Processing file ${i + 1}/${totalFiles}:`, file.name);
         
         // Update progress
         setProcessingProgress(Math.round((i / totalFiles) * 90));
         
         // Upload to storage
         const fileName = `${user.id}/${Date.now()}-${file.name}`;
+        console.log('Uploading to storage:', fileName);
+        
         const { data: uploadData, error: uploadError } = await supabase.storage
           .from('photos')
           .upload(fileName, file);
 
         if (uploadError) {
           console.error('Upload error:', uploadError);
+          toast({
+            title: "Upload failed",
+            description: `Failed to upload ${file.name}: ${uploadError.message}`,
+            variant: "destructive"
+          });
           continue;
         }
+
+        console.log('Upload successful:', uploadData);
 
         // Get public URL
         const { data: { publicUrl } } = supabase.storage
           .from('photos')
           .getPublicUrl(fileName);
 
+        console.log('Public URL generated:', publicUrl);
+
         // Create photo record
+        console.log('Creating photo record...');
         const { data: photoData, error: photoError } = await supabase
           .from('photos')
           .insert({
@@ -112,10 +129,18 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
 
         if (photoError) {
           console.error('Photo record error:', photoError);
+          toast({
+            title: "Database error",
+            description: `Failed to save photo record: ${photoError.message}`,
+            variant: "destructive"
+          });
           continue;
         }
 
+        console.log('Photo record created:', photoData);
+
         // Create inventory item
+        console.log('Creating inventory item...');
         const { error: inventoryError } = await supabase
           .from('inventory_items')
           .insert({
@@ -126,6 +151,13 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
 
         if (inventoryError) {
           console.error('Inventory error:', inventoryError);
+          toast({
+            title: "Inventory error",
+            description: `Failed to create inventory item: ${inventoryError.message}`,
+            variant: "destructive"
+          });
+        } else {
+          console.log('Inventory item created successfully');
         }
       }
 
