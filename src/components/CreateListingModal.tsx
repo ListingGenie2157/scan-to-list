@@ -15,6 +15,11 @@ interface InventoryItem {
   status: string;
   suggested_category: string | null;
   suggested_price: number | null;
+  suggested_title: string | null;
+  publisher: string | null;
+  publication_year: number | null;
+  condition_assessment: string | null;
+  genre: string | null;
   created_at: string;
   photos: {
     public_url: string | null;
@@ -30,11 +35,11 @@ interface CreateListingModalProps {
 
 export function CreateListingModal({ item, isOpen, onClose }: CreateListingModalProps) {
   const [listingData, setListingData] = useState({
-    title: item?.title || "",
+    title: item?.title || item?.suggested_title || "",
     price: item?.suggested_price?.toString() || "",
-    description: "",
-    condition: "good",
-    category: item?.suggested_category || "book"
+    description: item?.author ? `By ${item?.author}${item?.publisher ? ` - ${item?.publisher}` : ''}${item?.publication_year ? ` (${item?.publication_year})` : ''}` : "",
+    condition: item?.condition_assessment || "good",
+    category: item?.suggested_category || (item?.genre?.toLowerCase().includes('magazine') ? 'magazine' : 'book')
   });
 
   const handleSubmit = (e: React.FormEvent) => {

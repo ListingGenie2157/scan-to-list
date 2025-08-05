@@ -16,6 +16,11 @@ interface InventoryItem {
   status: string;
   suggested_category: string | null;
   suggested_price: number | null;
+  suggested_title: string | null;
+  publisher: string | null;
+  publication_year: number | null;
+  condition_assessment: string | null;
+  genre: string | null;
   created_at: string;
   photos: {
     public_url: string | null;
@@ -58,6 +63,11 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           status,
           suggested_category,
           suggested_price,
+          suggested_title,
+          publisher,
+          publication_year,
+          condition_assessment,
+          genre,
           created_at,
           confidence_score,
           photos (
