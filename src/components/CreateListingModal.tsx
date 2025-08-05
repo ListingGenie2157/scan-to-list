@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,6 +51,9 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>Create Listing</DialogTitle>
+          <DialogDescription>
+            Create a marketplace listing for this item with customizable details and pricing.
+          </DialogDescription>
         </DialogHeader>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
