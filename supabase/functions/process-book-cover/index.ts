@@ -2,7 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 
-const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const ocrSpaceApiKey = Deno.env.get('OCR_SPACE_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL');
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -26,65 +26,79 @@ serve(async (req) => {
     // Initialize Supabase client
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
-    // Analyze the book cover with OpenAI Vision
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    // Extract text using OCR.space
+    const formData = new FormData();
+    formData.append('url', imageUrl);
+    formData.append('apikey', ocrSpaceApiKey!);
+    formData.append('language', 'eng');
+    formData.append('isOverlayRequired', 'false');
+    formData.append('detectOrientation', 'false');
+    formData.append('scale', 'true');
+
+    const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert at analyzing book covers and extracting bibliographic information. Extract the following information from book cover images: title, author, publisher, publication year, ISBN (if visible), genre, condition assessment, and suggest a fair market price. Return the information as a JSON object with these exact keys: title, author, publisher, publication_year, isbn, genre, condition_assessment, suggested_price, confidence_score (0-1). If information is not clearly visible, use null for that field.'
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: 'Please analyze this book cover and extract all visible bibliographic information.'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: imageUrl
-                }
-              }
-            ]
-          }
-        ],
-        max_tokens: 500
-      }),
+      body: formData,
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error?.message || 'Failed to analyze image');
+    if (!ocrResponse.ok) {
+      throw new Error('Failed to extract text from image');
     }
 
-    const data = await response.json();
-    const content = data.choices[0].message.content;
+    const ocrData = await ocrResponse.json();
     
-    // Parse the JSON response from OpenAI
-    let extractedInfo;
-    try {
-      extractedInfo = JSON.parse(content);
-    } catch (e) {
-      // If JSON parsing fails, extract info manually
-      extractedInfo = {
-        title: null,
-        author: null,
-        publisher: null,
-        publication_year: null,
-        isbn: null,
-        genre: null,
-        condition_assessment: 'good',
-        suggested_price: null,
-        confidence_score: 0.5
-      };
+    if (ocrData.OCRExitCode !== 1) {
+      throw new Error(ocrData.ErrorMessage || 'OCR processing failed');
+    }
+
+    const extractedText = ocrData.ParsedResults?.[0]?.ParsedText || '';
+    
+    // Parse the extracted text to identify book information
+    const lines = extractedText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    
+    let extractedInfo = {
+      title: null,
+      author: null,
+      publisher: null,
+      publication_year: null,
+      isbn: null,
+      genre: null,
+      condition_assessment: 'good',
+      suggested_price: null,
+      confidence_score: 0.7
+    };
+
+    // Simple parsing logic - can be enhanced
+    if (lines.length > 0) {
+      // Usually the title is the largest text or first significant line
+      extractedInfo.title = lines[0];
+      
+      // Look for author patterns
+      for (const line of lines) {
+        if (line.toLowerCase().includes('by ') || 
+            line.toLowerCase().includes('author') ||
+            /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(line)) {
+          extractedInfo.author = line.replace(/^by\s+/i, '');
+          break;
+        }
+      }
+      
+      // Look for ISBN
+      for (const line of lines) {
+        const isbnMatch = line.match(/ISBN[:\s]*(\d{10}|\d{13}|\d{1,5}-\d{1,7}-\d{1,7}-\d{1,7}-\d{1})/i);
+        if (isbnMatch) {
+          extractedInfo.isbn = isbnMatch[1];
+          break;
+        }
+      }
+      
+      // Look for year
+      for (const line of lines) {
+        const yearMatch = line.match(/\b(19|20)\d{2}\b/);
+        if (yearMatch) {
+          extractedInfo.publication_year = parseInt(yearMatch[0]);
+          break;
+        }
+      }
     }
 
     // Create or update inventory item
