@@ -169,6 +169,30 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
           });
         } else {
           console.log('Inventory item created successfully');
+          
+          // Process the book cover with OCR
+          try {
+            console.log('Starting OCR processing for:', photoData.id);
+            const { data: ocrData, error: ocrError } = await supabase.functions.invoke('process-book-cover', {
+              body: { 
+                photoId: photoData.id, 
+                imageUrl: publicUrl 
+              }
+            });
+
+            if (ocrError) {
+              console.error('OCR processing error:', ocrError);
+              toast({
+                title: "OCR Warning",
+                description: `Image uploaded but OCR failed: ${ocrError.message}`,
+                variant: "destructive"
+              });
+            } else {
+              console.log('OCR processing successful:', ocrData);
+            }
+          } catch (ocrError) {
+            console.error('OCR processing exception:', ocrError);
+          }
         }
       }
 
