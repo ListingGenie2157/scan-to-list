@@ -6,7 +6,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, DollarSign } from "lucide-react";
+import { BookOpen, DollarSign, Sparkles, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface InventoryItem {
   id: string;
@@ -20,6 +22,7 @@ interface InventoryItem {
   publication_year: number | null;
   condition_assessment: string | null;
   genre: string | null;
+  isbn: string | null;
   created_at: string;
   photos: {
     public_url: string | null;
@@ -34,6 +37,8 @@ interface CreateListingModalProps {
 }
 
 export function CreateListingModal({ item, isOpen, onClose }: CreateListingModalProps) {
+  const { toast } = useToast();
+  const [isGeneratingListing, setIsGeneratingListing] = useState(false);
   const [listingData, setListingData] = useState({
     title: item?.title || item?.suggested_title || "",
     price: item?.suggested_price?.toString() || "",
@@ -41,6 +46,56 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
     condition: item?.condition_assessment || "good",
     category: item?.suggested_category || (item?.genre?.toLowerCase().includes('magazine') ? 'magazine' : 'book')
   });
+
+  const generateOptimizedListing = async () => {
+    if (!item) return;
+    
+    setIsGeneratingListing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-ebay-listing', {
+        body: {
+          itemData: {
+            title: item.title,
+            author: item.author,
+            publisher: item.publisher,
+            publication_year: item.publication_year,
+            condition: item.condition_assessment || 'good',
+            category: item.suggested_category || 'book',
+            isbn: item.isbn,
+            genre: item.genre
+          }
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (data?.success && data?.optimizedListing) {
+        setListingData(prev => ({
+          ...prev,
+          title: data.optimizedListing.title,
+          description: data.optimizedListing.description
+        }));
+        
+        toast({
+          title: "Listing Generated!",
+          description: "SEO-optimized title and description have been generated.",
+        });
+      } else {
+        throw new Error('Failed to generate optimized listing');
+      }
+    } catch (error) {
+      console.error('Error generating listing:', error);
+      toast({
+        title: "Generation Failed",
+        description: error.message || "Could not generate optimized listing. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingListing(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,6 +153,24 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
 
           {/* Listing Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="flex justify-between items-center">
+              <h3 className="font-medium">Listing Details</h3>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                onClick={generateOptimizedListing}
+                disabled={isGeneratingListing}
+              >
+                {isGeneratingListing ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="w-4 h-4 mr-2" />
+                )}
+                {isGeneratingListing ? 'Generating...' : 'AI Optimize'}
+              </Button>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="title">Listing Title</Label>
               <Input

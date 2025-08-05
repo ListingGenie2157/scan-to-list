@@ -21,6 +21,7 @@ interface InventoryItem {
   publication_year: number | null;
   condition_assessment: string | null;
   genre: string | null;
+  isbn: string | null;
   created_at: string;
   photos: {
     public_url: string | null;
@@ -68,6 +69,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           publication_year,
           condition_assessment,
           genre,
+          isbn,
           created_at,
           confidence_score,
           photos (
