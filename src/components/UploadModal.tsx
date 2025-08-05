@@ -67,6 +67,17 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
   };
 
   const startProcessing = async () => {
+    // Debug: Check authentication state
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('Authentication debug:', { 
+      session: session, 
+      user: session?.user, 
+      userId: session?.user?.id,
+      authHookUser: user,
+      authHookUserId: user?.id,
+      error: sessionError 
+    });
+
     if (uploadedFiles.length === 0 || !user) {
       console.log('Cannot start processing: no files or no user', { files: uploadedFiles.length, user: !!user });
       return;
