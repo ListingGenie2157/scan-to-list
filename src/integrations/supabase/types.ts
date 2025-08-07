@@ -95,6 +95,7 @@ export type Database = {
       }
       inventory_items: {
         Row: {
+          all_visible_text: string | null
           author: string | null
           bundle_id: string | null
           condition_assessment: string | null
@@ -102,6 +103,7 @@ export type Database = {
           created_at: string | null
           description: string | null
           ebay_category_id: number | null
+          edition: string | null
           edition_info: string | null
           extracted_text: Json | null
           format: string | null
@@ -112,11 +114,16 @@ export type Database = {
           issue_date: string | null
           issue_number: string | null
           listed_at: string | null
+          model_used: string | null
+          ocr_quality: string | null
           photo_id: string | null
+          processed_at: string | null
           publication_year: number | null
           publisher: string | null
+          series_title: string | null
           sold_at: string | null
           status: string | null
+          subtitle: string | null
           suggested_category: string | null
           suggested_price: number | null
           suggested_title: string | null
@@ -126,6 +133,7 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          all_visible_text?: string | null
           author?: string | null
           bundle_id?: string | null
           condition_assessment?: string | null
@@ -133,6 +141,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           ebay_category_id?: number | null
+          edition?: string | null
           edition_info?: string | null
           extracted_text?: Json | null
           format?: string | null
@@ -143,11 +152,16 @@ export type Database = {
           issue_date?: string | null
           issue_number?: string | null
           listed_at?: string | null
+          model_used?: string | null
+          ocr_quality?: string | null
           photo_id?: string | null
+          processed_at?: string | null
           publication_year?: number | null
           publisher?: string | null
+          series_title?: string | null
           sold_at?: string | null
           status?: string | null
+          subtitle?: string | null
           suggested_category?: string | null
           suggested_price?: number | null
           suggested_title?: string | null
@@ -157,6 +171,7 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          all_visible_text?: string | null
           author?: string | null
           bundle_id?: string | null
           condition_assessment?: string | null
@@ -164,6 +179,7 @@ export type Database = {
           created_at?: string | null
           description?: string | null
           ebay_category_id?: number | null
+          edition?: string | null
           edition_info?: string | null
           extracted_text?: Json | null
           format?: string | null
@@ -174,11 +190,16 @@ export type Database = {
           issue_date?: string | null
           issue_number?: string | null
           listed_at?: string | null
+          model_used?: string | null
+          ocr_quality?: string | null
           photo_id?: string | null
+          processed_at?: string | null
           publication_year?: number | null
           publisher?: string | null
+          series_title?: string | null
           sold_at?: string | null
           status?: string | null
+          subtitle?: string | null
           suggested_category?: string | null
           suggested_price?: number | null
           suggested_title?: string | null

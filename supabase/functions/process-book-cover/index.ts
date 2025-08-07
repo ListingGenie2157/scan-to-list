@@ -154,25 +154,48 @@ If you cannot read any text clearly, set "ocr_quality" to "failed" and "confiden
       return await handleAPIError(photoId, supabase, `All models failed: ${errorText}`);
     }
 
-    const data = await response.json();
-    const extractedContent = data.choices[0].message.content;
+    let data;
+    let extractedContent;
+    try {
+      data = await response.json();
+      extractedContent = data.choices?.[0]?.message?.content;
+      
+      if (!extractedContent) {
+        console.error('❌ No content in OpenAI response:', data);
+        return await handleAPIError(photoId, supabase, 'No content in OpenAI response');
+      }
+    } catch (jsonError) {
+      console.error('❌ Failed to parse OpenAI API response as JSON:', jsonError);
+      const responseText = await response.text();
+      console.error('Raw response:', responseText);
+      return await handleAPIError(photoId, supabase, `OpenAI API returned invalid JSON: ${responseText}`);
+    }
     
     console.log('✅ OpenAI Vision Response:', extractedContent);
     console.log('🤖 Model used:', modelUsed);
 
-    // Parse the JSON response with better error handling
+    // Parse the extracted content with multiple fallback strategies
     let extractedInfo;
     try {
-      // Clean the response in case there's extra text
-      const jsonMatch = extractedContent.match(/\{[\s\S]*\}/);
-      const jsonString = jsonMatch ? jsonMatch[0] : extractedContent;
-      extractedInfo = JSON.parse(jsonString);
-    } catch (parseError) {
-      console.error('❌ Failed to parse JSON response:', extractedContent);
-      console.error('Parse error:', parseError);
-      
-      // Try to extract any readable information manually
-      return await handleJSONParseError(photoId, supabase, extractedContent);
+      // Strategy 1: Try parsing as-is
+      extractedInfo = JSON.parse(extractedContent);
+    } catch (parseError1) {
+      console.log('❌ Strategy 1 failed, trying to extract JSON block...');
+      try {
+        // Strategy 2: Extract JSON from code blocks or markdown
+        const jsonMatch = extractedContent.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || 
+                         extractedContent.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const jsonString = jsonMatch[1] || jsonMatch[0];
+          extractedInfo = JSON.parse(jsonString);
+        } else {
+          throw new Error('No JSON found in response');
+        }
+      } catch (parseError2) {
+        console.error('❌ Strategy 2 failed, trying manual extraction...');
+        // Strategy 3: Manual extraction of key information
+        return await handleJSONParseError(photoId, supabase, extractedContent);
+      }
     }
 
     // Validate OCR quality
