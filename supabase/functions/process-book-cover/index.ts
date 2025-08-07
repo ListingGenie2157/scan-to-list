@@ -89,8 +89,39 @@ Look carefully at all text on the cover. For magazines, pay special attention to
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenAI API Error:', errorText);
-      throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+      console.error('❌ OpenAI API Error:', response.status, errorText);
+      
+      // Return a fallback response instead of throwing
+      const fallbackInfo = {
+        title: 'Processing Failed - Manual Review Needed',
+        author: null,
+        publisher: null,
+        publication_year: null,
+        isbn: null,
+        genre: 'book',
+        condition_assessment: 'good',
+        confidence_score: 0.1,
+        issue_number: null,
+        issue_date: null,
+        suggested_price: 10.0
+      };
+      
+      // Update database with fallback
+      const { data: inventoryItem } = await supabase
+        .from('inventory_items')
+        .update(fallbackInfo)
+        .eq('photo_id', photoId)
+        .select()
+        .maybeSingle();
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        inventoryItem,
+        extractedInfo: fallbackInfo,
+        message: `OpenAI API error: ${response.status}`
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const data = await response.json();
