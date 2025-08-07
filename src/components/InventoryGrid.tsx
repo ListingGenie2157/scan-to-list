@@ -4,11 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen, Grid3X3, List, LayoutGrid } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { CreateListingModal } from "@/components/CreateListingModal";
 import { BulkListingModal } from "@/components/BulkListingModal";
+import { BulkEditModal } from "@/components/BulkEditModal";
 
 interface InventoryItem {
   id: string;
@@ -48,6 +50,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [isCreateListingModalOpen, setIsCreateListingModalOpen] = useState(false);
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isBulkListingModalOpen, setIsBulkListingModalOpen] = useState(false);
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
 
   useImperativeHandle(ref, () => ({
     refreshInventory: fetchInventory
@@ -151,12 +154,39 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
     }
   };
 
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedItems(prev => 
+      prev.includes(itemId) 
+        ? prev.filter(id => id !== itemId)
+        : [...prev, itemId]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedItems.length === filteredInventory.length) {
+      setSelectedItems([]);
+    } else {
+      setSelectedItems(filteredInventory.map(item => item.id));
+    }
+  };
+
   const renderItemCard = (item: InventoryItem) => {
+    const isSelected = selectedItems.includes(item.id);
+    
     if (viewMode === "compact") {
       return (
-        <Card key={item.id} className="shadow-card hover:shadow-elevated transition-shadow cursor-pointer">
+        <Card key={item.id} className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}>
           <CardContent className="p-2">
             <div className="space-y-2">
+              {/* Selection Checkbox */}
+              <div className="flex justify-between items-start">
+                <Checkbox
+                  checked={isSelected}
+                  onCheckedChange={() => toggleItemSelection(item.id)}
+                  className="mt-1"
+                />
+              </div>
+              
               {/* Compact Image */}
               <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
                 {item.photos?.public_url ? (
@@ -203,9 +233,16 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
     if (viewMode === "list") {
       return (
-        <Card key={item.id} className="shadow-card hover:shadow-elevated transition-shadow cursor-pointer">
+        <Card key={item.id} className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}>
           <CardContent className="p-3">
             <div className="flex gap-3">
+              {/* Selection Checkbox */}
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => toggleItemSelection(item.id)}
+                className="mt-1"
+              />
+              
               {/* List Image */}
               <div className="w-16 h-20 bg-muted rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                 {item.photos?.public_url ? (
@@ -277,9 +314,17 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
     // Default grid view
     return (
-      <Card key={item.id} className="shadow-card hover:shadow-elevated transition-shadow cursor-pointer">
+      <Card key={item.id} className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}>
         <CardContent className="p-4">
           <div className="space-y-3">
+            {/* Selection Checkbox */}
+            <div className="flex justify-between items-start">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => toggleItemSelection(item.id)}
+              />
+            </div>
+            
             {/* Image */}
             <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
               {item.photos?.public_url ? (
@@ -401,9 +446,19 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             
             {/* View Mode Toggle Row */}
             <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Showing {filteredInventory.length} of {inventory.length} items
-              </p>
+              <div className="flex items-center gap-4">
+                <Checkbox
+                  checked={selectedItems.length === filteredInventory.length && filteredInventory.length > 0}
+                  onCheckedChange={toggleSelectAll}
+                />
+                <p className="text-sm text-muted-foreground">
+                  {selectedItems.length > 0 ? (
+                    <>Selected {selectedItems.length} of {filteredInventory.length} items</>
+                  ) : (
+                    <>Showing {filteredInventory.length} of {inventory.length} items</>
+                  )}
+                </p>
+              </div>
               
               <div className="flex items-center gap-2">
                 <span className="text-sm text-muted-foreground">View:</span>
@@ -444,16 +499,27 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
       {/* Action Buttons */}
       <div className="flex gap-2">
+        {selectedItems.length > 0 && (
+          <>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setIsBulkEditModalOpen(true)}
+            >
+              <Edit3 className="w-4 h-4 mr-2" />
+              Bulk Edit ({selectedItems.length})
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setIsBulkListingModalOpen(true)}
+            >
+              Bulk Create Listings ({selectedItems.length})
+            </Button>
+          </>
+        )}
         <Button variant="outline" size="sm">
           Export Selected
-        </Button>
-        <Button 
-          variant="outline" 
-          size="sm"
-          onClick={() => setIsBulkListingModalOpen(true)}
-          disabled={filteredInventory.length === 0}
-        >
-          Bulk Create Listings
         </Button>
       </div>
 
@@ -511,10 +577,20 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
         }}
       />
 
-      <BulkListingModal 
-        items={filteredInventory}
+      <BulkListingModal
         isOpen={isBulkListingModalOpen}
         onClose={() => setIsBulkListingModalOpen(false)}
+        selectedItems={selectedItems.length > 0 ? selectedItems : filteredInventory.map(item => item.id)}
+      />
+      
+      <BulkEditModal
+        isOpen={isBulkEditModalOpen}
+        onClose={() => setIsBulkEditModalOpen(false)}
+        selectedItems={selectedItems}
+        onBulkUpdateComplete={() => {
+          fetchInventory();
+          setSelectedItems([]);
+        }}
       />
     </div>
   );

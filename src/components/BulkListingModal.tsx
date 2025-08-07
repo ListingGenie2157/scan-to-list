@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +31,7 @@ interface InventoryItem {
 }
 
 interface BulkListingModalProps {
-  items: InventoryItem[];
+  selectedItems: string[];
   isOpen: boolean;
   onClose: () => void;
 }
@@ -40,23 +40,60 @@ interface ProcessingStatus {
   [itemId: string]: 'pending' | 'processing' | 'complete' | 'error';
 }
 
-export function BulkListingModal({ items, isOpen, onClose }: BulkListingModalProps) {
+export function BulkListingModal({ selectedItems, isOpen, onClose }: BulkListingModalProps) {
   const { toast } = useToast();
-  const [selectedItems, setSelectedItems] = useState<string[]>(items.map(item => item.id));
+  const [items, setItems] = useState<InventoryItem[]>([]);
+  const [selectedForProcessing, setSelectedForProcessing] = useState<string[]>(selectedItems);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>({});
   const [processedCount, setProcessedCount] = useState(0);
 
-  const handleSelectAll = (checked: boolean) => {
-    setSelectedItems(checked ? items.map(item => item.id) : []);
+  // Fetch item details when modal opens
+  useEffect(() => {
+    if (isOpen && selectedItems.length > 0) {
+      fetchItemDetails();
+    }
+  }, [isOpen, selectedItems]);
+
+  const fetchItemDetails = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inventory_items')
+        .select(`
+          id, title, author, status, suggested_category, suggested_price,
+          suggested_title, publisher, publication_year, condition_assessment,
+          genre, isbn, issue_number, issue_date, created_at, confidence_score,
+          photos (public_url)
+        `)
+        .in('id', selectedItems);
+
+      if (error) throw error;
+      setItems(data || []);
+      setSelectedForProcessing(selectedItems);
+    } catch (error) {
+      console.error('Error fetching items:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load item details",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleSelectItem = (itemId: string, checked: boolean) => {
-    setSelectedItems(prev => 
-      checked 
-        ? [...prev, itemId] 
-        : prev.filter(id => id !== itemId)
-    );
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedForProcessing(items.map(item => item.id));
+    } else {
+      setSelectedForProcessing([]);
+    }
+  };
+
+  const handleItemSelect = (itemId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedForProcessing(prev => [...prev, itemId]);
+    } else {
+      setSelectedForProcessing(prev => prev.filter(id => id !== itemId));
+    }
   };
 
   const generateBulkListings = async () => {
@@ -191,7 +228,7 @@ export function BulkListingModal({ items, isOpen, onClose }: BulkListingModalPro
                   <div className="flex items-start space-x-3">
                     <Checkbox 
                       checked={isSelected}
-                      onCheckedChange={(checked) => handleSelectItem(item.id, !!checked)}
+                      onCheckedChange={(checked) => handleItemSelect(item.id, !!checked)}
                       disabled={isProcessing}
                     />
                     

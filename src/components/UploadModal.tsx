@@ -3,12 +3,20 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Camera, X, FileImage, CheckCircle, AlertTriangle } from "lucide-react";
+import { Upload, Camera, X, FileImage, CheckCircle, AlertTriangle, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { BarcodeScanner } from "@capacitor-community/barcode-scanner";
 import { Capacitor } from "@capacitor/core";
+import { BatchSettingsModal } from "./BatchSettingsModal";
+
+interface BatchSettings {
+  defaultCategory: string;
+  defaultCondition: string;
+  autoGenerateTitle: boolean;
+  autoGeneratePrice: boolean;
+}
 
 interface UploadModalProps {
   open: boolean;
@@ -21,6 +29,13 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showBatchSettings, setShowBatchSettings] = useState(false);
+  const [batchSettings, setBatchSettings] = useState<BatchSettings>({
+    defaultCategory: "auto",
+    defaultCondition: "auto", 
+    autoGenerateTitle: true,
+    autoGeneratePrice: true
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -248,17 +263,22 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
         } else {
           console.log('Inventory item created successfully');
           
-          // Process the book cover with OCR
-          try {
-            console.log('Starting OCR processing for:', photoData.id);
-            console.log('OCR request payload:', { photoId: photoData.id, imageUrl: publicUrl });
-            
-            const { data: ocrData, error: ocrError } = await supabase.functions.invoke('process-book-cover', {
-              body: { 
+            // Process the book cover with OCR
+            try {
+              console.log('Starting OCR processing for:', photoData.id);
+              console.log('OCR request payload:', { 
                 photoId: photoData.id, 
-                imageUrl: publicUrl 
-              }
-            });
+                imageUrl: publicUrl,
+                batchSettings: batchSettings
+              });
+              
+              const { data: ocrData, error: ocrError } = await supabase.functions.invoke('process-book-cover', {
+                body: { 
+                  photoId: photoData.id, 
+                  imageUrl: publicUrl,
+                  batchSettings: batchSettings
+                }
+              });
 
             console.log('OCR response data:', ocrData);
             console.log('OCR response error:', ocrError);
@@ -332,13 +352,25 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Upload className="w-5 h-5" />
-            Upload Book & Magazine Photos
-          </DialogTitle>
-          <DialogDescription>
-            Upload multiple photos for AI processing. Supported formats: JPG, PNG, HEIC
-          </DialogDescription>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Upload className="w-5 h-5" />
+              <div>
+                <DialogTitle>Upload Book & Magazine Photos</DialogTitle>
+                <DialogDescription>
+                  Upload multiple photos for AI processing. Supported formats: JPG, PNG, HEIC
+                </DialogDescription>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowBatchSettings(true)}
+            >
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
+            </Button>
+          </div>
         </DialogHeader>
 
         <div className="space-y-4 flex-1 overflow-y-auto">
@@ -476,6 +508,13 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
           </div>
         </div>
       </DialogContent>
+      
+      <BatchSettingsModal
+        isOpen={showBatchSettings}
+        onClose={() => setShowBatchSettings(false)}
+        onSettingsChange={setBatchSettings}
+        currentSettings={batchSettings}
+      />
     </Dialog>
   );
 };
