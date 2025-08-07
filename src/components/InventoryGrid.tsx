@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3 } from "lucide-react";
+import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { CreateListingModal } from "@/components/CreateListingModal";
@@ -51,6 +51,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
   const [isBulkListingModalOpen, setIsBulkListingModalOpen] = useState(false);
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   useImperativeHandle(ref, () => ({
     refreshInventory: fetchInventory
@@ -167,6 +168,36 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       setSelectedItems([]);
     } else {
       setSelectedItems(filteredInventory.map(item => item.id));
+    }
+  };
+
+  const handleExportCSV = async () => {
+    if (selectedItems.length === 0) return;
+    
+    setIsExporting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('export-inventory-csv', {
+        body: {
+          selectedItemIds: selectedItems,
+          userId: user?.id
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.download_url) {
+        // Create a temporary link to download the file
+        const link = document.createElement('a');
+        link.href = data.download_url;
+        link.download = data.file_name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      console.error('Error exporting CSV:', error);
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -516,11 +547,17 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             >
               Bulk Create Listings ({selectedItems.length})
             </Button>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={handleExportCSV}
+              disabled={isExporting}
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {isExporting ? 'Exporting...' : `Export CSV (${selectedItems.length})`}
+            </Button>
           </>
         )}
-        <Button variant="outline" size="sm">
-          Export Selected
-        </Button>
       </div>
 
       {/* Inventory Grid */}
