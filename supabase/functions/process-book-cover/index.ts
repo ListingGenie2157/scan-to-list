@@ -12,18 +12,34 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log('🚀 Function started, method:', req.method);
+  
   if (req.method === 'OPTIONS') {
+    console.log('✅ CORS preflight request handled');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
+    console.log('📥 Reading request body...');
     const { photoId, imageUrl } = await req.json();
+    console.log('📋 Request data:', { photoId, imageUrl });
 
     if (!photoId || !imageUrl) {
+      console.error('❌ Missing required data');
       throw new Error('Photo ID and image URL are required');
     }
 
+    console.log('🔑 Checking environment variables...');
+    console.log('OCR API Key exists:', !!ocrSpaceApiKey);
+    console.log('Supabase URL exists:', !!supabaseUrl);
+    console.log('Service Key exists:', !!supabaseServiceKey);
+    
+    if (!ocrSpaceApiKey) {
+      throw new Error('OCR_SPACE_API_KEY is not configured');
+    }
+
     // Initialize Supabase client
+    console.log('🗄️ Initializing Supabase client...');
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
     // Extract text using OCR.space
