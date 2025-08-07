@@ -143,11 +143,11 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const getGridColumns = () => {
     switch (viewMode) {
       case "compact":
-        return "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3";
+        return "grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-2 sm:gap-3";
       case "list":
         return "grid grid-cols-1 gap-2";
       default: // grid
-        return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
+        return "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4";
     }
   };
 
@@ -289,7 +289,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <BookOpen className="w-8 h-8 text-muted-foreground" />
+                <BookOpen className="w-6 h-6 text-muted-foreground" />
               )}
             </div>
 
