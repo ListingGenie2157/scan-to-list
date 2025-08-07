@@ -132,8 +132,7 @@ Look carefully at all text on the cover. For magazines, pay special attention to
     // Create or update inventory item
     const { data: inventoryItem, error: inventoryError } = await supabase
       .from('inventory_items')
-      .upsert({
-        photo_id: photoId,
+      .update({
         title: cleanedInfo.title,
         author: cleanedInfo.author,
         publisher: cleanedInfo.publisher,
@@ -145,11 +144,10 @@ Look carefully at all text on the cover. For magazines, pay special attention to
         confidence_score: cleanedInfo.confidence_score,
         issue_number: cleanedInfo.issue_number,
         issue_date: cleanedInfo.issue_date,
-        status: 'analyzed',
+        status: 'photographed', // Keep existing valid status
         extracted_text: extractedContent // Store AI response for debugging
-      }, {
-        onConflict: 'photo_id'
       })
+      .eq('photo_id', photoId)
       .select()
       .single();
 
