@@ -17,19 +17,31 @@ serve(async (req) => {
   }
 
   try {
+    console.log('🚀 Function called with method:', req.method);
+    
     const { photoId, imageUrl } = await req.json();
+    console.log('📋 Request data:', { photoId, imageUrl });
 
     if (!photoId || !imageUrl) {
+      console.error('❌ Missing required fields');
       throw new Error('Photo ID and image URL are required');
     }
 
     if (!openAIApiKey) {
+      console.error('❌ OpenAI API key not found');
       throw new Error('OPENAI_API_KEY environment variable is not set');
     }
 
-    console.log('Processing image with OpenAI Vision:', imageUrl);
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.error('❌ Supabase credentials not found');
+      throw new Error('Supabase environment variables not set');
+    }
+
+    console.log('🖼️ Processing image with OpenAI Vision:', imageUrl);
+    console.log('🔑 API key available:', !!openAIApiKey);
 
     // Initialize Supabase client
+    console.log('🗄️ Initializing Supabase...');
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
     // Use OpenAI GPT-4 Vision to analyze the book/magazine cover
@@ -50,6 +62,7 @@ serve(async (req) => {
 
 Look carefully at all text on the cover. For magazines, pay special attention to issue numbers, dates, and volume numbers. For books, focus on title, author, and any publisher information. If you can't read something clearly, use null for that field.`;
 
+    console.log('📡 Calling OpenAI API...');
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -71,6 +84,8 @@ Look carefully at all text on the cover. For magazines, pay special attention to
         temperature: 0.1, // Low temperature for more consistent extraction
       }),
     });
+
+    console.log('📊 OpenAI Response status:', response.status);
 
     if (!response.ok) {
       const errorText = await response.text();
