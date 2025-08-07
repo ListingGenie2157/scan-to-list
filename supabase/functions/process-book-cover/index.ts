@@ -186,10 +186,10 @@ serve(async (req) => {
     }
 
     // Create or update inventory item
+    console.log('💾 Updating inventory item with data:', extractedInfo);
     const { data: inventoryItem, error: inventoryError } = await supabase
       .from('inventory_items')
-      .upsert({
-        photo_id: photoId,
+      .update({
         title: extractedInfo.title,
         author: extractedInfo.author,
         publisher: extractedInfo.publisher,
@@ -203,15 +203,17 @@ serve(async (req) => {
         issue_date: extractedInfo.issue_date,
         status: 'analyzed',
         extracted_text: extractedInfo
-      }, {
-        onConflict: 'photo_id'
       })
+      .eq('photo_id', photoId)
       .select()
       .single();
 
     if (inventoryError) {
+      console.error('❌ Database error:', inventoryError);
       throw new Error(`Database error: ${inventoryError.message}`);
     }
+    
+    console.log('✅ Inventory item updated successfully:', inventoryItem);
 
     return new Response(JSON.stringify({ 
       success: true, 
