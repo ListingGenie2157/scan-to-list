@@ -76,10 +76,25 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
       }
 
       if (data?.success && data?.optimizedListing) {
+        // Handle both string and object responses from the AI
+        let title = data.optimizedListing.title;
+        let description = data.optimizedListing.description;
+        
+        // If the response is a JSON string, try to parse it
+        if (typeof data.optimizedListing.description === 'string' && data.optimizedListing.description.trim().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(data.optimizedListing.description);
+            title = parsed.title || title;
+            description = parsed.description || description;
+          } catch (e) {
+            console.warn('Failed to parse JSON description, using as-is');
+          }
+        }
+        
         setListingData(prev => ({
           ...prev,
-          title: data.optimizedListing.title,
-          description: data.optimizedListing.description
+          title: title,
+          description: description
         }));
         
         toast({
