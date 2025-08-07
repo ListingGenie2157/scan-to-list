@@ -2,14 +2,16 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle, LogOut, User } from "lucide-react";
+import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle, LogOut, User, Sparkles } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
+import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
 
 export const Dashboard = () => {
   const { user, signOut } = useAuth();
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showBundleSuggestions, setShowBundleSuggestions] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "inventory">("overview");
   const inventoryGridRef = useRef<{ refreshInventory: () => void }>(null);
 
@@ -213,6 +215,27 @@ export const Dashboard = () => {
               </CardContent>
             </Card>
 
+            {/* AI Bundle Suggestions Card */}
+            <Card className="mb-6 shadow-card border-2 border-purple-200 dark:border-purple-800">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-500" />
+                  AI Bundle Suggestions
+                </CardTitle>
+                <CardDescription>Let AI analyze your inventory and suggest profitable bundle opportunities</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button 
+                  onClick={() => setShowBundleSuggestions(true)}
+                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                  size="lg"
+                >
+                  <Sparkles className="w-5 h-5 mr-2" />
+                  Get Bundle Suggestions
+                </Button>
+              </CardContent>
+            </Card>
+
             {/* Recent Activity */}
             <Card className="shadow-card">
               <CardHeader>
@@ -246,6 +269,11 @@ export const Dashboard = () => {
         open={showUploadModal} 
         onOpenChange={setShowUploadModal}
         onUploadSuccess={handleUploadSuccess}
+      />
+      
+      <BundleSuggestionsModal 
+        isOpen={showBundleSuggestions}
+        onClose={() => setShowBundleSuggestions(false)}
       />
     </div>
   );

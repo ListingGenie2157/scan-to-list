@@ -58,42 +58,40 @@ serve(async (req) => {
     console.log('🗄️ Initializing Supabase...');
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
-    // Enhanced OCR-focused prompt
-    const visionPrompt = `You are an expert at reading text from book and magazine covers. Please carefully read ALL visible text on this image and extract the following information. 
+    // Enhanced multi-item detection prompt
+    const visionPrompt = `Analyze this image and extract information about the book(s), magazine(s), or other items shown. 
 
-CRITICAL: Focus on OCR accuracy - read every piece of text you can see, no matter how small or faded.
+CRITICAL: First determine if this image contains MULTIPLE distinct items or just ONE item:
 
-Look for:
-- Main title (usually largest text)
-- Subtitle (smaller text under main title)
-- Author name(s) (often below title or at bottom)
-- Publisher information (small text, often at bottom)
-- Issue numbers for magazines (like "Vol 5 No 3" or "#25")
-- Dates (month/year for magazines, year for books)
-- ISBN numbers (usually on back, but sometimes visible on spine)
-- Series information
-- Edition information
+If MULTIPLE items are detected:
+- Set "item_count" to the number of distinct items
+- Set "is_bundle" to true
+- Analyze what type of bundle this could be:
+  * If all items are the same title/book: Create specific lot description like "Lot of X [Title] books"
+  * If items share theme/genre/author: Create themed bundle like "Witchcraft Book Bundle" or "Stephen King Collection"
+  * If mixed items: Create generic bundle like "Mixed Book Lot" or "Book Bundle"
+- Set "bundle_title" to an appropriate bundle name
+- Set "bundle_description" to describe the collection
+- List individual titles in "individual_titles" array if clearly visible
 
-Return ONLY valid JSON in this exact format:
-{
-  "all_visible_text": "list every piece of text you can read, separated by | symbols",
-  "title": "exact main title as written",
-  "subtitle": "subtitle if present, null if not",
-  "author": "author name if visible, null if not",
-  "publisher": "publisher name if visible, null if not",
-  "publication_year": "4-digit year if visible, null if not",
-  "isbn": "ISBN numbers only, no dashes, null if not visible",
-  "genre": "book or magazine",
-  "issue_number": "issue/volume number for magazines, null for books",
-  "issue_date": "Month Year format for magazines, null for books",
-  "series_title": "series name if this is part of a series, null if not",
-  "edition": "edition information if visible, null if not",
-  "condition_assessment": "mint, excellent, good, or fair based on visible wear/damage",
-  "confidence_score": "decimal 0.1-1.0 based on text clarity and how much you could read",
-  "ocr_quality": "excellent, good, poor, or failed"
-}
+If SINGLE item detected:
+- Set "item_count" to 1
+- Set "is_bundle" to false
+- Extract standard single item information
 
-If you cannot read any text clearly, set "ocr_quality" to "failed" and "confidence_score" to 0.1.`;
+For ALL cases, provide:
+- "title": Main title or bundle name
+- "author": Author(s) or "Various" for bundles
+- "publisher": Publisher(s) or "Various" for bundles
+- "publication_year": Year or range for bundles
+- "isbn": ISBN if single item, null for bundles
+- "genre": Primary genre/category
+- "condition_assessment": Overall condition (mint/excellent/good/fair/poor)
+- "confidence_score": 0.0-1.0 based on text clarity
+- "ocr_quality": good/fair/poor
+- "all_visible_text": All text you can see in the image
+
+Return as JSON only, no other text.`;
 
     console.log('📡 Calling OpenAI API...');
     
