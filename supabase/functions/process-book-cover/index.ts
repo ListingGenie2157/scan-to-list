@@ -2,80 +2,6 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 
-// Function to resize image if too large for OCR API
-async function resizeImageIfNeeded(imageUrl: string): Promise<string> {
-  try {
-    // First, check the image size
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch image: ${response.statusText}`);
-    }
-    
-    const imageBlob = await response.blob();
-    const imageSizeKB = imageBlob.size / 1024;
-    
-    console.log(`📏 Image size: ${imageSizeKB.toFixed(2)} KB`);
-    
-    // If image is under 1MB (1024 KB), return original URL
-    if (imageSizeKB < 1024) {
-      console.log('✅ Image size is acceptable, using original');
-      return imageUrl;
-    }
-    
-    console.log('🔄 Image too large, resizing...');
-    
-    // Create a canvas to resize the image
-    const canvas = new OffscreenCanvas(800, 600); // Max dimensions
-    const ctx = canvas.getContext('2d');
-    
-    if (!ctx) {
-      throw new Error('Could not get canvas context');
-    }
-    
-    // Create image from blob
-    const imageBitmap = await createImageBitmap(imageBlob);
-    
-    // Calculate new dimensions maintaining aspect ratio
-    const maxWidth = 800;
-    const maxHeight = 600;
-    const aspectRatio = imageBitmap.width / imageBitmap.height;
-    
-    let newWidth = maxWidth;
-    let newHeight = maxHeight;
-    
-    if (aspectRatio > 1) {
-      // Landscape
-      newHeight = maxWidth / aspectRatio;
-    } else {
-      // Portrait
-      newWidth = maxHeight * aspectRatio;
-    }
-    
-    // Resize canvas
-    canvas.width = newWidth;
-    canvas.height = newHeight;
-    
-    // Draw resized image
-    ctx.drawImage(imageBitmap, 0, 0, newWidth, newHeight);
-    
-    // Convert to blob with quality compression
-    const resizedBlob = await canvas.convertToBlob({
-      type: 'image/jpeg',
-      quality: 0.8
-    });
-    
-    console.log(`📐 Resized to: ${(resizedBlob.size / 1024).toFixed(2)} KB`);
-    
-    // For now, return original URL since we can't upload the resized image
-    // In a real implementation, you'd upload the resized blob to storage
-    return imageUrl;
-    
-  } catch (error) {
-    console.error('❌ Error resizing image:', error);
-    return imageUrl; // Fallback to original
-  }
-}
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -103,18 +29,62 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!ocrApiKey) {
+      console.error('❌ OCR_SPACE_API_KEY not found');
       throw new Error('OCR_SPACE_API_KEY environment variable is not set');
+    }
+
+    // Check image size first
+    console.log('📏 Checking image size...');
+    const imageResponse = await fetch(imageUrl);
+    if (!imageResponse.ok) {
+      throw new Error(`Failed to access image: ${imageResponse.statusText}`);
+    }
+    
+    const imageBlob = await imageResponse.blob();
+    const imageSizeKB = imageBlob.size / 1024;
+    
+    console.log(`📏 Image size: ${imageSizeKB.toFixed(2)} KB`);
+    
+    // OCR.space has a 1MB limit
+    if (imageSizeKB > 1024) {
+      console.log('⚠️ Image too large for OCR API, updating with basic info...');
+      
+      // Initialize Supabase client for large image handling
+      const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+      
+      // Update with basic info indicating image was too large
+      const { data: inventoryItem, error: inventoryError } = await supabase
+        .from('inventory_items')
+        .update({
+          title: 'Large Image - Manual Review Needed',
+          status: 'analyzed',
+          confidence_score: 0.1,
+          extracted_text: `Image too large for OCR processing (${imageSizeKB.toFixed(2)} KB). Please manually add details.`
+        })
+        .eq('photo_id', photoId)
+        .select()
+        .maybeSingle();
+
+      if (inventoryError) {
+        console.error('❌ Database error for large image:', inventoryError);
+        throw new Error(`Database error: ${inventoryError.message}`);
+      }
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        inventoryItem,
+        message: `Image too large for OCR (${imageSizeKB.toFixed(2)} KB). Updated with placeholder data.`
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('🔑 API key available');
     console.log('🖼️ Processing image:', imageUrl);
 
-    // Check and potentially resize image
-    const processedImageUrl = await resizeImageIfNeeded(imageUrl);
-
-    // OCR API call with the processed image URL
+    // OCR API call with original image URL (size already checked)
     const formData = new FormData();
-    formData.append('url', processedImageUrl);
+    formData.append('url', imageUrl);
     formData.append('apikey', ocrApiKey);
     formData.append('language', 'eng');
     formData.append('detectOrientation', 'true');
