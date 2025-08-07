@@ -366,32 +366,41 @@ export type Database = {
       user_profiles: {
         Row: {
           created_at: string | null
+          custom_title_text: string | null
           email: string
           full_name: string | null
           id: string
           images_used_this_month: number | null
           monthly_image_limit: number | null
           subscription_tier: string | null
+          title_prefixes: string[] | null
+          title_suffixes: string[] | null
           updated_at: string | null
         }
         Insert: {
           created_at?: string | null
+          custom_title_text?: string | null
           email: string
           full_name?: string | null
           id: string
           images_used_this_month?: number | null
           monthly_image_limit?: number | null
           subscription_tier?: string | null
+          title_prefixes?: string[] | null
+          title_suffixes?: string[] | null
           updated_at?: string | null
         }
         Update: {
           created_at?: string | null
+          custom_title_text?: string | null
           email?: string
           full_name?: string | null
           id?: string
           images_used_this_month?: number | null
           monthly_image_limit?: number | null
           subscription_tier?: string | null
+          title_prefixes?: string[] | null
+          title_suffixes?: string[] | null
           updated_at?: string | null
         }
         Relationships: []
@@ -401,7 +410,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      update_title_preferences: {
+        Args: {
+          user_id_param: string
+          prefixes?: string[]
+          suffixes?: string[]
+          custom_text?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
