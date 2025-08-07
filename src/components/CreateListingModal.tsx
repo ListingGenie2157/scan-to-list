@@ -80,14 +80,26 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
         let title = data.optimizedListing.title;
         let description = data.optimizedListing.description;
         
-        // If the response is a JSON string, try to parse it
-        if (typeof data.optimizedListing.description === 'string' && data.optimizedListing.description.trim().startsWith('{')) {
-          try {
-            const parsed = JSON.parse(data.optimizedListing.description);
-            title = parsed.title || title;
-            description = parsed.description || description;
-          } catch (e) {
-            console.warn('Failed to parse JSON description, using as-is');
+        // If the response contains JSON markup, extract and parse it
+        if (typeof data.optimizedListing.description === 'string') {
+          let jsonString = data.optimizedListing.description.trim();
+          
+          // Remove markdown code block if present
+          if (jsonString.startsWith('```json')) {
+            jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+          }
+          
+          // Try to parse as JSON
+          if (jsonString.startsWith('{')) {
+            try {
+              const parsed = JSON.parse(jsonString);
+              title = parsed.title || title;
+              description = parsed.description || description;
+            } catch (e) {
+              console.warn('Failed to parse JSON description, using as-is');
+              // If parsing fails, use the original description without the JSON markup
+              description = data.optimizedListing.description.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+            }
           }
         }
         
