@@ -70,7 +70,7 @@ Look carefully at all text on the cover. For magazines, pay special attention to
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-2025-04-14',
+        model: 'gpt-4o-mini',
         messages: [
           {
             role: 'user',
