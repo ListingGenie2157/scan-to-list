@@ -14,13 +14,29 @@ serve(async (req) => {
   }
 
   try {
-    const { itemData } = await req.json();
+    const { itemData, userId } = await req.json();
 
     if (!itemData) {
       throw new Error('Item data is required');
     }
 
     const { title, author, publisher, publication_year, condition, category, isbn, genre, issue_number, issue_date } = itemData;
+
+    // Get user preferences for title additions
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+    
+    let userPreferences = null;
+    if (userId) {
+      const { data } = await supabase
+        .from('user_profiles')
+        .select('title_prefixes, title_suffixes, custom_title_text')
+        .eq('id', userId)
+        .maybeSingle();
+      userPreferences = data;
+    }
 
     // Create a detailed prompt for eBay listing optimization
     const isMagazine = genre?.toLowerCase().includes('magazine') || category?.toLowerCase().includes('magazine');
@@ -41,6 +57,9 @@ Please generate:
    ${isMagazine ? '- For magazines: Include magazine name, issue number/date, and year for maximum searchability' : '- For books: Include title, author, and key descriptive terms'}
    - Use relevant keywords that collectors and buyers search for
    - Include condition if space allows
+   ${userPreferences?.title_prefixes?.length ? `- MUST include these prefixes: ${userPreferences.title_prefixes.join(', ')}` : ''}
+   ${userPreferences?.title_suffixes?.length ? `- MUST include these suffixes: ${userPreferences.title_suffixes.join(', ')}` : ''}
+   ${userPreferences?.custom_title_text ? `- MUST include this text: "${userPreferences.custom_title_text}"` : ''}
 2. A compelling description (200-300 words) that:
    - Highlights key selling points
    ${isMagazine ? '- Mentions issue details and any special features (cover stories, interviews, etc.)' : '- Includes author credentials and book highlights'}

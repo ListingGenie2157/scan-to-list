@@ -6,9 +6,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, DollarSign, Sparkles, Loader2 } from "lucide-react";
+import { BookOpen, DollarSign, Sparkles, Loader2, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { TitlePreferencesModal } from "./TitlePreferencesModal";
 
 interface InventoryItem {
   id: string;
@@ -40,7 +42,9 @@ interface CreateListingModalProps {
 
 export function CreateListingModal({ item, isOpen, onClose }: CreateListingModalProps) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [isGeneratingListing, setIsGeneratingListing] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
   const [listingData, setListingData] = useState({
     title: item?.title || item?.suggested_title || "",
     price: item?.suggested_price?.toString() || "",
@@ -67,7 +71,8 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
             genre: item.genre,
             issue_number: item.issue_number,
             issue_date: item.issue_date
-          }
+          },
+          userId: user?.id
         }
       });
 
@@ -186,20 +191,30 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="flex justify-between items-center">
               <h3 className="font-medium">Listing Details</h3>
-              <Button 
-                type="button" 
-                variant="outline" 
-                size="sm"
-                onClick={generateOptimizedListing}
-                disabled={isGeneratingListing}
-              >
-                {isGeneratingListing ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Sparkles className="w-4 h-4 mr-2" />
-                )}
-                {isGeneratingListing ? 'Generating...' : 'AI Optimize'}
-              </Button>
+              <div className="flex gap-2">
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setShowPreferences(true)}
+                >
+                  <Settings className="w-4 h-4" />
+                </Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  size="sm"
+                  onClick={generateOptimizedListing}
+                  disabled={isGeneratingListing}
+                >
+                  {isGeneratingListing ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-4 h-4 mr-2" />
+                  )}
+                  {isGeneratingListing ? 'Generating...' : 'AI Optimize'}
+                </Button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -279,6 +294,11 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
           </form>
         </div>
       </DialogContent>
+      
+      <TitlePreferencesModal 
+        isOpen={showPreferences} 
+        onClose={() => setShowPreferences(false)} 
+      />
     </Dialog>
   );
 }
