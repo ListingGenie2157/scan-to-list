@@ -2,206 +2,178 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
 
+const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+const supabaseUrl = Deno.env.get('SUPABASE_URL');
+const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
 serve(async (req) => {
-  console.log('🚀 Full OCR Function called, method:', req.method);
-
   if (req.method === 'OPTIONS') {
-    console.log('✅ CORS preflight handled');
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('📥 Reading request...');
     const { photoId, imageUrl } = await req.json();
-    console.log('📋 Request data:', { photoId, imageUrl });
 
     if (!photoId || !imageUrl) {
       throw new Error('Photo ID and image URL are required');
     }
 
-    const ocrApiKey = Deno.env.get('OCR_SPACE_API_KEY');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (!ocrApiKey) {
-      console.error('❌ OCR_SPACE_API_KEY not found');
-      throw new Error('OCR_SPACE_API_KEY environment variable is not set');
+    if (!openAIApiKey) {
+      throw new Error('OPENAI_API_KEY environment variable is not set');
     }
 
-    // Check image size first
-    console.log('📏 Checking image size...');
-    const imageResponse = await fetch(imageUrl);
-    if (!imageResponse.ok) {
-      throw new Error(`Failed to access image: ${imageResponse.statusText}`);
-    }
-    
-    const imageBlob = await imageResponse.blob();
-    const imageSizeKB = imageBlob.size / 1024;
-    
-    console.log(`📏 Image size: ${imageSizeKB.toFixed(2)} KB`);
-    
-    // OCR.space has a 1MB limit
-    if (imageSizeKB > 1024) {
-      console.log('⚠️ Image too large for OCR API, updating with basic info...');
-      
-      // Initialize Supabase client for large image handling
-      const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
-      
-      // Update with basic info indicating image was too large
-      const { data: inventoryItem, error: inventoryError } = await supabase
-        .from('inventory_items')
-        .update({
-          title: 'Large Image - Manual Review Needed',
-          status: 'analyzed',
-          confidence_score: 0.1,
-          extracted_text: `Image too large for OCR processing (${imageSizeKB.toFixed(2)} KB). Please manually add details.`
-        })
-        .eq('photo_id', photoId)
-        .select()
-        .maybeSingle();
+    console.log('Processing image with OpenAI Vision:', imageUrl);
 
-      if (inventoryError) {
-        console.error('❌ Database error for large image:', inventoryError);
-        throw new Error(`Database error: ${inventoryError.message}`);
-      }
-
-      return new Response(JSON.stringify({ 
-        success: true, 
-        inventoryItem,
-        message: `Image too large for OCR (${imageSizeKB.toFixed(2)} KB). Updated with placeholder data.`
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    console.log('🔑 API key available');
-    console.log('🖼️ Processing image:', imageUrl);
-
-    // OCR API call with original image URL (size already checked)
-    const formData = new FormData();
-    formData.append('url', imageUrl);
-    formData.append('apikey', ocrApiKey);
-    formData.append('language', 'eng');
-    formData.append('detectOrientation', 'true');
-    formData.append('scale', 'true');
-    formData.append('OCREngine', '2');
-
-    console.log('📡 Calling OCR.space API...');
-    const ocrResponse = await fetch('https://api.ocr.space/parse/image', {
-      method: 'POST',
-      body: formData,
-    });
-
-    if (!ocrResponse.ok) {
-      const errorText = await ocrResponse.text();
-      console.error('❌ OCR API Error:', errorText);
-      throw new Error(`OCR API returned ${ocrResponse.status}: ${errorText}`);
-    }
-
-    const ocrData = await ocrResponse.json();
-    console.log('📄 OCR Response:', JSON.stringify(ocrData, null, 2));
-    
-    if (ocrData.OCRExitCode !== 1) {
-      console.error('❌ OCR Exit Code Error:', ocrData.ErrorMessage);
-      throw new Error(`OCR Error: ${ocrData.ErrorMessage || 'OCR processing failed'}`);
-    }
-
-    const extractedText = ocrData.ParsedResults?.[0]?.ParsedText || '';
-    console.log('📝 Extracted text length:', extractedText.length);
-    
-    if (!extractedText.trim()) {
-      throw new Error('No text could be extracted from the image');
-    }
-
-    // Parse the extracted text
-    const lines = extractedText.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-    const allText = extractedText.toLowerCase();
-    
-    let extractedInfo = {
-      title: lines[0] || 'Unknown Title',
-      author: null,
-      publisher: null,
-      publication_year: null,
-      isbn: null,
-      genre: 'book',
-      condition_assessment: 'good',
-      suggested_price: 15.0,
-      confidence_score: 0.7,
-      issue_number: null,
-      issue_date: null
-    };
-
-    // Basic parsing
-    const isMagazine = allText.includes('magazine') || allText.includes('issue');
-    if (isMagazine) {
-      extractedInfo.genre = 'magazine';
-      extractedInfo.suggested_price = 8.0;
-    }
-
-    // Look for author in first few lines
-    for (const line of lines.slice(1, 4)) {
-      if (line.toLowerCase().includes('by ') || /^[A-Z][a-z]+ [A-Z][a-z]+$/.test(line)) {
-        extractedInfo.author = line.replace(/^by\s+/i, '');
-        break;
-      }
-    }
-
-    console.log('📚 Parsed info:', { 
-      title: extractedInfo.title, 
-      author: extractedInfo.author, 
-      genre: extractedInfo.genre 
-    });
-
-    // Initialize Supabase client and update database
-    console.log('🗄️ Initializing Supabase...');
+    // Initialize Supabase client
     const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
 
-    console.log('💾 Updating database...');
+    // Use OpenAI GPT-4 Vision to analyze the book/magazine cover
+    const visionPrompt = `Analyze this book or magazine cover image and extract the following information. Respond with valid JSON only:
+
+{
+  "title": "exact title as written on cover",
+  "author": "author name if visible (for books) or null for magazines",
+  "publisher": "publisher name if visible",
+  "publication_year": "year if visible (number only)",
+  "isbn": "ISBN if visible (numbers only, no dashes)",
+  "genre": "book or magazine",
+  "issue_number": "issue number if it's a magazine",
+  "issue_date": "issue date if it's a magazine (Month Year format)",
+  "condition_assessment": "mint, excellent, good, or fair based on visible condition",
+  "confidence_score": "decimal from 0.1 to 1.0 based on text clarity"
+}
+
+Look carefully at all text on the cover. For magazines, pay special attention to issue numbers, dates, and volume numbers. For books, focus on title, author, and any publisher information. If you can't read something clearly, use null for that field.`;
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${openAIApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4.1-2025-04-14',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: visionPrompt },
+              { type: 'image_url', image_url: { url: imageUrl } }
+            ]
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.1, // Low temperature for more consistent extraction
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API Error:', errorText);
+      throw new Error(`OpenAI API error: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+    const extractedContent = data.choices[0].message.content;
+    
+    console.log('OpenAI Vision Response:', extractedContent);
+
+    // Parse the JSON response
+    let extractedInfo;
+    try {
+      extractedInfo = JSON.parse(extractedContent);
+    } catch (parseError) {
+      console.error('Failed to parse JSON response:', extractedContent);
+      throw new Error('Failed to parse AI response as JSON');
+    }
+
+    // Validate and clean the extracted info
+    const cleanedInfo = {
+      title: extractedInfo.title || null,
+      author: extractedInfo.author || null,
+      publisher: extractedInfo.publisher || null,
+      publication_year: extractedInfo.publication_year ? parseInt(extractedInfo.publication_year) : null,
+      isbn: extractedInfo.isbn || null,
+      genre: extractedInfo.genre || 'book',
+      condition_assessment: extractedInfo.condition_assessment || 'good',
+      confidence_score: extractedInfo.confidence_score || 0.7,
+      issue_number: extractedInfo.issue_number || null,
+      issue_date: extractedInfo.issue_date || null,
+    };
+
+    // Estimate pricing based on genre and condition
+    let suggested_price = 10.0; // Default
+    const isMagazine = cleanedInfo.genre?.toLowerCase().includes('magazine');
+    
+    switch (cleanedInfo.condition_assessment) {
+      case 'mint':
+        suggested_price = isMagazine ? 15.0 : 25.0;
+        break;
+      case 'excellent':
+        suggested_price = isMagazine ? 10.0 : 20.0;
+        break;
+      case 'good':
+        suggested_price = isMagazine ? 8.0 : 15.0;
+        break;
+      case 'fair':
+        suggested_price = isMagazine ? 5.0 : 8.0;
+        break;
+    }
+    
+    cleanedInfo.suggested_price = suggested_price;
+
+    console.log('Cleaned extracted info:', cleanedInfo);
+
+    // Create or update inventory item
     const { data: inventoryItem, error: inventoryError } = await supabase
       .from('inventory_items')
-      .update({
-        title: extractedInfo.title,
-        author: extractedInfo.author,
-        genre: extractedInfo.genre,
-        condition_assessment: extractedInfo.condition_assessment,
-        suggested_price: extractedInfo.suggested_price,
-        confidence_score: extractedInfo.confidence_score,
+      .upsert({
+        photo_id: photoId,
+        title: cleanedInfo.title,
+        author: cleanedInfo.author,
+        publisher: cleanedInfo.publisher,
+        publication_year: cleanedInfo.publication_year,
+        isbn: cleanedInfo.isbn,
+        genre: cleanedInfo.genre,
+        condition_assessment: cleanedInfo.condition_assessment,
+        suggested_price: cleanedInfo.suggested_price,
+        confidence_score: cleanedInfo.confidence_score,
+        issue_number: cleanedInfo.issue_number,
+        issue_date: cleanedInfo.issue_date,
         status: 'analyzed',
-        extracted_text: extractedText
+        extracted_text: extractedContent // Store AI response for debugging
+      }, {
+        onConflict: 'photo_id'
       })
-      .eq('photo_id', photoId)
       .select()
       .single();
 
     if (inventoryError) {
-      console.error('❌ Database error:', inventoryError);
+      console.error('Database error:', inventoryError);
       throw new Error(`Database error: ${inventoryError.message}`);
     }
 
-    console.log('✅ Database updated successfully');
+    console.log('Successfully saved inventory item:', inventoryItem);
 
     return new Response(JSON.stringify({ 
       success: true, 
       inventoryItem,
-      extractedInfo: {
-        title: extractedInfo.title,
-        author: extractedInfo.author,
-        genre: extractedInfo.genre
-      }
+      extractedInfo: cleanedInfo
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
   } catch (error) {
-    console.error('💥 Function error:', error.message);
+    console.error('Error in process-book-cover function:', error);
     return new Response(JSON.stringify({ 
       error: error.message,
-      success: false
+      success: false,
+      timestamp: new Date().toISOString()
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
