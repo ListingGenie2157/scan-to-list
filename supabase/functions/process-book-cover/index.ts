@@ -97,8 +97,8 @@ If you cannot read any text clearly, set "ocr_quality" to "failed" and "confiden
 
     console.log('📡 Calling OpenAI API...');
     
-    // Try multiple model names in case one doesn't work
-    const modelNames = ['gpt-4o', 'gpt-4o-mini', 'gpt-4-vision-preview'];
+    // Try multiple model names in case one doesn't work  
+    const modelNames = ['gpt-4o-mini', 'gpt-4o'];
     let response;
     let modelUsed;
     
