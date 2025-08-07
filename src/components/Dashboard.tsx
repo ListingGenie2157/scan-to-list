@@ -69,36 +69,42 @@ export const Dashboard = () => {
       <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+            <div className="flex-shrink-0">
+              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
                 BookLister Pro
               </h1>
-              <p className="text-sm text-muted-foreground">AI-Powered Reseller Tool</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">AI-Powered Reseller Tool</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <User className="w-4 h-4" />
-                {user?.email}
-              </div>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={signOut}
-              >
-                <LogOut className="w-4 h-4" />
-                Sign Out
-              </Button>
+            
+            {/* Mobile-first layout */}
+            <div className="flex items-center gap-2">
+              {/* Upload button - always visible */}
               <Button 
                 variant="upload" 
-                size="default"
+                size="sm"
                 onClick={() => {
                   console.log('Upload button clicked!');
                   setShowUploadModal(true);
                 }}
                 className="shadow-elevated"
               >
-                <Upload className="w-5 h-5" />
-                Upload Photos
+                <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline ml-2">Upload Photos</span>
+              </Button>
+              
+              {/* User menu - simplified for mobile */}
+              <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
+                <User className="w-4 h-4" />
+                <span className="max-w-32 truncate">{user?.email}</span>
+              </div>
+              
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={signOut}
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline ml-2">Sign Out</span>
               </Button>
             </div>
           </div>

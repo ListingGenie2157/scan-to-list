@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen } from "lucide-react";
+import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen, Grid3X3, List, LayoutGrid } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { CreateListingModal } from "@/components/CreateListingModal";
@@ -41,6 +41,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"grid" | "compact" | "list">("grid");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
@@ -139,78 +140,337 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       <Calendar className="w-4 h-4 text-muted-foreground" />;
   };
 
+  const getGridColumns = () => {
+    switch (viewMode) {
+      case "compact":
+        return "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3";
+      case "list":
+        return "grid grid-cols-1 gap-2";
+      default: // grid
+        return "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4";
+    }
+  };
+
+  const renderItemCard = (item: InventoryItem) => {
+    if (viewMode === "compact") {
+      return (
+        <Card key={item.id} className="shadow-card hover:shadow-elevated transition-shadow cursor-pointer">
+          <CardContent className="p-2">
+            <div className="space-y-2">
+              {/* Compact Image */}
+              <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+                {item.photos?.public_url ? (
+                  <img 
+                    src={item.photos.public_url} 
+                    alt={item.title || 'Item photo'}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                )}
+              </div>
+              
+              {/* Compact Content */}
+              <div className="space-y-1">
+                <h3 className="font-medium text-xs leading-tight line-clamp-2">
+                  {item.title || item.suggested_category || 'Untitled'}
+                </h3>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-sm">
+                    ${item.suggested_price?.toFixed(2) || '0.00'}
+                  </span>
+                  {getStatusIcon(item.status)}
+                </div>
+              </div>
+              
+              {/* Compact Actions */}
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="w-full text-xs"
+                onClick={() => {
+                  setSelectedItem(item);
+                  setIsCreateListingModalOpen(true);
+                }}
+              >
+                List
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    if (viewMode === "list") {
+      return (
+        <Card key={item.id} className="shadow-card hover:shadow-elevated transition-shadow cursor-pointer">
+          <CardContent className="p-3">
+            <div className="flex gap-3">
+              {/* List Image */}
+              <div className="w-16 h-20 bg-muted rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                {item.photos?.public_url ? (
+                  <img 
+                    src={item.photos.public_url} 
+                    alt={item.title || 'Item photo'}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                )}
+              </div>
+              
+              {/* List Content */}
+              <div className="flex-1 space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-medium text-sm leading-tight line-clamp-1">
+                    {item.title || item.suggested_category || 'Untitled Item'}
+                  </h3>
+                  <div className="flex items-center gap-1">
+                    {getStatusIcon(item.status)}
+                    {getStatusBadge(item.status)}
+                  </div>
+                </div>
+                
+                <p className="text-xs text-muted-foreground">
+                  {item.author || 'Unknown Author'}
+                </p>
+                
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-lg">
+                    ${item.suggested_price?.toFixed(2) || '0.00'}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {item.confidence_score || 0}% confidence
+                  </span>
+                </div>
+              </div>
+              
+              {/* List Actions */}
+              <div className="flex flex-col gap-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="text-xs"
+                  onClick={() => {
+                    // TODO: Implement edit functionality
+                  }}
+                >
+                  Edit
+                </Button>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="text-xs"
+                  onClick={() => {
+                    setSelectedItem(item);
+                    setIsCreateListingModalOpen(true);
+                  }}
+                >
+                  List
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      );
+    }
+
+    // Default grid view
+    return (
+      <Card key={item.id} className="shadow-card hover:shadow-elevated transition-shadow cursor-pointer">
+        <CardContent className="p-4">
+          <div className="space-y-3">
+            {/* Image */}
+            <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+              {item.photos?.public_url ? (
+                <img 
+                  src={item.photos.public_url} 
+                  alt={item.title || 'Item photo'}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <BookOpen className="w-8 h-8 text-muted-foreground" />
+              )}
+            </div>
+
+            {/* Content */}
+            <div className="space-y-2">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-medium text-sm leading-tight line-clamp-2">
+                  {item.title || item.suggested_category || 'Untitled Item'}
+                </h3>
+                {getCategoryIcon(item.suggested_category || 'book')}
+              </div>
+              
+              <p className="text-sm text-muted-foreground line-clamp-1">
+                {item.author || 'Unknown Author'}
+              </p>
+              
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-lg">
+                  ${item.suggested_price?.toFixed(2) || '0.00'}
+                </span>
+                <div className="flex items-center gap-1">
+                  {getStatusIcon(item.status)}
+                  {getStatusBadge(item.status)}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Added {new Date(item.created_at).toLocaleDateString()}</span>
+                <span className="flex items-center gap-1">
+                  <div className="w-2 h-2 bg-success rounded-full" />
+                  {item.confidence_score || 0}% confidence
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-2">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => {
+                  // TODO: Implement edit functionality
+                }}
+              >
+                Edit
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="flex-1"
+                onClick={() => {
+                  setSelectedItem(item);
+                  setIsCreateListingModalOpen(true);
+                }}
+              >
+                Create Listing
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Filters */}
       <Card className="shadow-card">
         <CardContent className="p-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by title or author..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+          <div className="flex flex-col gap-4">
+            {/* Search and Filters Row */}
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by title or author..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <Filter className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="processed">Processed</SelectItem>
+                  <SelectItem value="listed">Listed</SelectItem>
+                  <SelectItem value="sold">Sold</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  <SelectItem value="book">Books</SelectItem>
+                  <SelectItem value="magazine">Magazines</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <Filter className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
-                <SelectItem value="processed">Processed</SelectItem>
-                <SelectItem value="listed">Listed</SelectItem>
-                <SelectItem value="sold">Sold</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-              <SelectTrigger className="w-full sm:w-40">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="book">Books</SelectItem>
-                <SelectItem value="magazine">Magazines</SelectItem>
-              </SelectContent>
-            </Select>
+            {/* View Mode Toggle Row */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                Showing {filteredInventory.length} of {inventory.length} items
+              </p>
+              
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">View:</span>
+                <div className="flex rounded-lg border p-1">
+                  <Button
+                    variant={viewMode === "grid" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("grid")}
+                    className="h-8 px-3"
+                  >
+                    <LayoutGrid className="w-4 h-4" />
+                    <span className="hidden sm:inline ml-1">Grid</span>
+                  </Button>
+                  <Button
+                    variant={viewMode === "compact" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("compact")}
+                    className="h-8 px-3"
+                  >
+                    <Grid3X3 className="w-4 h-4" />
+                    <span className="hidden sm:inline ml-1">Compact</span>
+                  </Button>
+                  <Button
+                    variant={viewMode === "list" ? "default" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("list")}
+                    className="h-8 px-3"
+                  >
+                    <List className="w-4 h-4" />
+                    <span className="hidden sm:inline ml-1">List</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Results Summary */}
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Showing {filteredInventory.length} of {inventory.length} items
-        </p>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            Export Selected
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setIsBulkListingModalOpen(true)}
-            disabled={filteredInventory.length === 0}
-          >
-            Bulk Create Listings
-          </Button>
-        </div>
+      {/* Action Buttons */}
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm">
+          Export Selected
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm"
+          onClick={() => setIsBulkListingModalOpen(true)}
+          disabled={filteredInventory.length === 0}
+        >
+          Bulk Create Listings
+        </Button>
       </div>
 
       {/* Inventory Grid */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
+        <div className={getGridColumns()}>
+          {[...Array(viewMode === "compact" ? 12 : 6)].map((_, i) => (
             <Card key={i} className="shadow-card">
-              <CardContent className="p-4">
+              <CardContent className={viewMode === "compact" ? "p-2" : "p-4"}>
                 <div className="space-y-3 animate-pulse">
-                  <div className="aspect-[3/4] bg-muted rounded-lg" />
+                  <div className={
+                    viewMode === "compact" 
+                      ? "aspect-[3/4] bg-muted rounded-lg" 
+                      : viewMode === "list"
+                      ? "w-16 h-20 bg-muted rounded-lg"
+                      : "aspect-[3/4] bg-muted rounded-lg"
+                  } />
                   <div className="space-y-2">
                     <div className="h-4 bg-muted rounded w-3/4" />
                     <div className="h-3 bg-muted rounded w-1/2" />
@@ -222,92 +482,12 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredInventory.map((item) => (
-            <Card key={item.id} className="shadow-card hover:shadow-elevated transition-shadow cursor-pointer">
-              <CardContent className="p-4">
-                <div className="space-y-3">
-                  {/* Image */}
-                  <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
-                    {item.photos?.public_url ? (
-                      <img 
-                        src={item.photos.public_url} 
-                        alt={item.title || 'Item photo'}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <BookOpen className="w-8 h-8 text-muted-foreground" />
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <h3 className="font-medium text-sm leading-tight line-clamp-2">
-                        {item.title || item.suggested_category || 'Untitled Item'}
-                      </h3>
-                      {getCategoryIcon(item.suggested_category || 'book')}
-                    </div>
-                    
-                    <p className="text-sm text-muted-foreground line-clamp-1">
-                      {item.author || 'Unknown Author'}
-                    </p>
-                    
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-lg">
-                        ${item.suggested_price?.toFixed(2) || '0.00'}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        {getStatusIcon(item.status)}
-                        {getStatusBadge(item.status)}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs text-muted-foreground">
-                      <span>Added {new Date(item.created_at).toLocaleDateString()}</span>
-                      <span className="flex items-center gap-1">
-                        <div className="w-2 h-2 bg-success rounded-full" />
-                        {item.confidence_score || 0}% confidence
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex gap-2 pt-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="flex-1"
-                      onClick={() => {
-                        console.log('Edit button clicked for item:', item.id);
-                        // TODO: Implement edit functionality
-                      }}
-                    >
-                      Edit
-                    </Button>
-                    <Button 
-                      variant="default" 
-                      size="sm" 
-                      className="flex-1"
-                      onClick={() => {
-                        console.log('Create listings button clicked!');
-                        console.log('Setting selected item:', item);
-                        setSelectedItem(item);
-                        setIsCreateListingModalOpen(true);
-                        console.log('Modal should be open now');
-                      }}
-                    >
-                      Create Listing
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className={getGridColumns()}>
+          {filteredInventory.map((item) => renderItemCard(item))}
         </div>
       )}
 
-      {filteredInventory.length === 0 && (
+      {filteredInventory.length === 0 && !loading && (
         <Card className="shadow-card">
           <CardContent className="p-8 text-center">
             <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
