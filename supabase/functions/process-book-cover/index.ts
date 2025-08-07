@@ -19,7 +19,15 @@ serve(async (req) => {
   try {
     console.log('🚀 Function called with method:', req.method);
     
-    const { photoId, imageUrl } = await req.json();
+    let requestData;
+    try {
+      requestData = await req.json();
+    } catch (parseError) {
+      console.error('❌ JSON parsing error:', parseError);
+      throw new Error('Invalid JSON in request body');
+    }
+    
+    const { photoId, imageUrl } = requestData;
     console.log('📋 Request data:', { photoId, imageUrl });
 
     if (!photoId || !imageUrl) {
@@ -29,12 +37,50 @@ serve(async (req) => {
 
     if (!openAIApiKey) {
       console.error('❌ OpenAI API key not found');
-      throw new Error('OPENAI_API_KEY environment variable is not set');
+      
+      // Return fallback for missing API key
+      const fallbackInfo = {
+        title: 'API Key Missing - Manual Review Needed',
+        author: null,
+        publisher: null,
+        publication_year: null,
+        isbn: null,
+        genre: 'book',
+        condition_assessment: 'good',
+        confidence_score: 0.1,
+        issue_number: null,
+        issue_date: null,
+        suggested_price: 10.0
+      };
+      
+      // Initialize Supabase to update with fallback
+      const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+      const { data: inventoryItem } = await supabase
+        .from('inventory_items')
+        .update(fallbackInfo)
+        .eq('photo_id', photoId)
+        .select()
+        .maybeSingle();
+
+      return new Response(JSON.stringify({ 
+        success: true, 
+        inventoryItem,
+        extractedInfo: fallbackInfo,
+        message: 'OpenAI API key not configured'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     if (!supabaseUrl || !supabaseServiceKey) {
       console.error('❌ Supabase credentials not found');
-      throw new Error('Supabase environment variables not set');
+      return new Response(JSON.stringify({ 
+        error: 'Supabase credentials not configured',
+        success: false
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     console.log('🖼️ Processing image with OpenAI Vision:', imageUrl);
