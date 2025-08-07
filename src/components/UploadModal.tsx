@@ -248,50 +248,12 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
         } else {
           console.log('Inventory item created successfully');
           
-          // Process the book cover with OCR
-          try {
-            console.log('Starting OCR processing for:', photoData.id);
-            console.log('OCR request payload:', { photoId: photoData.id, imageUrl: publicUrl });
-            
-            const { data: ocrData, error: ocrError } = await supabase.functions.invoke('process-book-cover', {
-              body: { 
-                photoId: photoData.id, 
-                imageUrl: publicUrl 
-              }
-            });
-
-            console.log('OCR response data:', ocrData);
-            console.log('OCR response error:', ocrError);
-
-            if (ocrError) {
-              console.error('OCR processing error:', ocrError);
-              toast({
-                title: "OCR Processing Failed",
-                description: `OCR failed: ${ocrError.message}. Check console for details.`,
-                variant: "destructive"
-              });
-            } else if (ocrData?.success) {
-              console.log('OCR processing successful:', ocrData);
-              toast({
-                title: "OCR Processing Complete",
-                description: "Book/magazine details extracted successfully!",
-              });
-            } else {
-              console.warn('OCR processing returned no success flag:', ocrData);
-              toast({
-                title: "OCR Processing Warning", 
-                description: "OCR completed but may not have extracted all details.",
-                variant: "destructive"
-              });
-            }
-          } catch (ocrError) {
-            console.error('OCR processing exception:', ocrError);
-            toast({
-              title: "OCR Exception",
-              description: `OCR failed with exception: ${ocrError.message}`,
-              variant: "destructive"
-            });
-          }
+          // Process the book cover with OCR (temporarily disabled)
+          console.log('OCR processing temporarily disabled for debugging');
+          toast({
+            title: "Upload Complete",
+            description: "Photo uploaded successfully. OCR processing temporarily disabled for debugging.",
+          });
         }
       }
 
