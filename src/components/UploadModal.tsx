@@ -445,8 +445,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
         </div>
 
         {/* Action Buttons - Always visible at bottom */}
-        <div className="border-t pt-4 mt-4 bg-background">
-          <div className="flex gap-3 pt-4">
+        <div className="sticky bottom-0 border-t pt-4 mt-4 bg-background z-50">
+          <div className="flex gap-3">
             <Button
               onClick={startProcessing}
               disabled={uploadedFiles.length === 0 || isProcessing}
