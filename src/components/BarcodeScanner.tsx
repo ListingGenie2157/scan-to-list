@@ -1,9 +1,16 @@
 import { useState } from 'react';
-import { BarcodeScanner } from '@capacitor-community/barcode-scanner';
+import { Capacitor } from '@capacitor/core';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Camera, Loader2 } from 'lucide-react';
+
+async function getScanner() {
+  if (Capacitor.getPlatform() === 'web') return null;
+  const mod = await import('@capacitor-community/barcode-scanner');
+  return mod.BarcodeScanner;
+}
+
 
 interface BarcodeScannerProps {
   onScanSuccess?: (data: any) => void;
@@ -15,12 +22,14 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   const { toast } = useToast();
 
   const checkPermissions = async () => {
-    const status = await BarcodeScanner.checkPermission({ force: true });
-    
+    const Scanner = await getScanner();
+    if (!Scanner) return false;
+
+    const status = await Scanner.checkPermission({ force: true });
     if (status.granted) {
       return true;
     }
-    
+
     if (status.denied) {
       toast({
         title: "Permission Denied",
@@ -29,22 +38,25 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
       });
       return false;
     }
-    
+
     return false;
   };
 
   const startScan = async () => {
-    const hasPermission = await checkPermissions();
-    if (!hasPermission) return;
-
     setIsScanning(true);
     
     try {
+      const Scanner = await getScanner();
+      if (!Scanner) return;
+
       // Hide background elements
       document.body.classList.add('barcode-scanner-active');
-      
-      // Start scanning
-      const result = await BarcodeScanner.startScan();
+
+      await Scanner.checkPermission({ force: true });
+      await Scanner.hideBackground();
+      const result = await Scanner.startScan();
+      await Scanner.showBackground();
+      await Scanner.stopScan();
       
       if (result.hasContent) {
         setIsProcessing(true);
@@ -61,7 +73,6 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
       setIsScanning(false);
       setIsProcessing(false);
       document.body.classList.remove('barcode-scanner-active');
-      BarcodeScanner.stopScan();
     }
   };
 
@@ -100,10 +111,12 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
     }
   };
 
-  const stopScan = () => {
+  const stopScan = async () => {
     setIsScanning(false);
     document.body.classList.remove('barcode-scanner-active');
-    BarcodeScanner.stopScan();
+    const Scanner = await getScanner();
+    if (!Scanner) return;
+    await Scanner.stopScan();
   };
 
   if (isScanning) {

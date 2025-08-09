@@ -7,9 +7,15 @@ import { Upload, Camera, X, FileImage, CheckCircle, AlertTriangle, Settings } fr
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { BarcodeScanner } from "@capacitor-community/barcode-scanner";
+
 import { Capacitor } from "@capacitor/core";
 import { BatchSettingsModal } from "./BatchSettingsModal";
+
+async function getScanner() {
+  if (Capacitor.getPlatform() === 'web') return null;
+  const mod = await import('@capacitor-community/barcode-scanner');
+  return mod.BarcodeScanner;
+}
 
 interface BatchSettings {
   defaultCategory: string;
@@ -95,7 +101,10 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
 
     try {
       // Check permissions
-      const status = await BarcodeScanner.checkPermission({ force: true });
+      const Scanner = await getScanner();
+      if (!Scanner) return;
+
+      const status = await Scanner.checkPermission({ force: true });
       
       if (!status.granted) {
         toast({
@@ -111,9 +120,10 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
       // Hide background elements
       document.body.classList.add('barcode-scanner-active');
       
-      // Start scanning
-      const result = await BarcodeScanner.startScan();
-      
+      await Scanner.hideBackground();
+      const result = await Scanner.startScan();
+      await Scanner.showBackground();
+      await Scanner.stopScan();
       if (result.hasContent) {
         toast({
           title: "Barcode Scanned",
@@ -155,8 +165,12 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
     } finally {
       setIsProcessing(false);
       document.body.classList.remove('barcode-scanner-active');
-      BarcodeScanner.stopScan();
-    }
+      const Scanner = await getScanner();
+      if (Scanner) {
+        await Scanner.showBackground();
+        await Scanner.stopScan();
+      }
+    };
   };
 
   const startProcessing = async () => {
