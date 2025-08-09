@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Camera, X, FileImage, CheckCircle, AlertTriangle, Settings } from "lucide-react";
+import { Upload, Camera, X, FileImage, CheckCircle, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -47,6 +47,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  const isNative = Capacitor.getPlatform() !== 'web';
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -108,11 +109,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
 
     try {
       setScanning(true);
-      await Scanner.hideBackground(); // optional, makes the camera fullscreen
-      const result = await Scanner.startScan(); // blocking call until scan or cancel
-      await Scanner.showBackground();
-      await Scanner.stopScan();
-      setScanning(false);
+      await Scanner.hideBackground();
+      const result = await Scanner.startScan();
 
       if (result?.hasContent && result.content) {
         const code = result.content.trim();
@@ -172,10 +170,11 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
         setError('No code detected.');
       }
     } catch (e: any) {
+      setError(e?.message ?? 'Scan failed.');
+    } finally {
       setScanning(false);
       await Scanner.showBackground().catch(() => {});
       await Scanner.stopScan().catch(() => {});
-      setError(e?.message ?? 'Scan failed.');
     }
   }, [onUploadSuccess, onOpenChange, toast]);
 
@@ -445,7 +444,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
               disabled={scanning || isProcessing}
             >
               <Camera className="w-4 h-4 mr-2" />
-              {scanning ? 'Scanning...' : (Capacitor.isNativePlatform() ? 'Scan Barcode (Books & Magazines)' : 'Scan Barcode (Mobile App Only)')}
+              {scanning ? 'Scanning...' : (isNative ? 'Scan Barcode (Books & Magazines)' : 'Scan Barcode (Mobile App Only)')}
             </Button>
             
             {/* Show error if any */}
