@@ -2,10 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here.
+   All colors MUST be HSL. */
 
+/* Base tokens */
 @layer base {
   :root {
     --background: 240 20% 99%;
@@ -47,7 +47,7 @@ All colors MUST be HSL.
     --gradient-primary: linear-gradient(135deg, hsl(217 89% 61%), hsl(220 100% 66%));
     --gradient-secondary: linear-gradient(135deg, hsl(240 6% 97%), hsl(240 4% 95%));
     --gradient-hero: linear-gradient(135deg, hsl(217 89% 61%) 0%, hsl(220 100% 66%) 50%, hsl(234 89% 74%) 100%);
-    
+
     /* Professional shadows */
     --shadow-card: 0 1px 3px 0 hsl(240 6% 90% / 0.1), 0 1px 2px 0 hsl(240 6% 90% / 0.06);
     --shadow-elevated: 0 10px 15px -3px hsl(240 6% 90% / 0.1), 0 4px 6px -2px hsl(240 6% 90% / 0.05);
@@ -67,7 +67,10 @@ All colors MUST be HSL.
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
+}
 
+/* Dark tokens */
+@layer base {
   .dark {
     --background: 222.2 84% 4.9%;
     --foreground: 210 40% 98%;
@@ -107,16 +110,15 @@ All colors MUST be HSL.
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
   }
-
-  * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground;
-  }
 }
 
+/* Global base styles */
+@layer base {
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground; }
+}
+
+/* Utilities */
 @layer utilities {
   /* Barcode Scanner Styles */
   .barcode-scanner-active { visibility: hidden; }
