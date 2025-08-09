@@ -47,18 +47,30 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
     
     try {
       const Scanner = await getScanner();
-      if (!Scanner) return;
+      if (!Scanner) {
+        toast({
+          title: "Mobile Only",
+          description: "Barcode scanning works in the mobile app.",
+          variant: "destructive"
+        });
+        return;
+      }
 
-      // Hide background elements
+      // Ensure permission is granted (prompts if needed)
+      const hasPermission = await checkPermissions();
+      if (!hasPermission) {
+        return;
+      }
+
+      // Hide background elements for camera preview
       document.body.classList.add('barcode-scanner-active');
 
-      await Scanner.checkPermission({ force: true });
       await Scanner.hideBackground();
       const result = await Scanner.startScan();
       await Scanner.showBackground();
       await Scanner.stopScan();
       
-      if (result.hasContent) {
+      if (result?.hasContent) {
         setIsProcessing(true);
         await processBarcode(result.content);
       }
