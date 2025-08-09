@@ -115,27 +115,58 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
       setScanning(false);
 
       if (result?.hasContent && result.content) {
-        setBarcode(result.content);
+        const code = result.content.trim();
+        setBarcode(code);
         
-        // Call our edge function to look up product information
-        const { data, error } = await supabase.functions.invoke('lookup-product', {
-          body: { barcode: result.content, batchSettings }
-        });
+        // Try server-side lookup first (saves to DB when successful)
+        let handledByServer = false;
+        try {
+          const { data, error } = await supabase.functions.invoke('lookup-product', {
+            body: { barcode: code, batchSettings }
+          });
 
-        if (!error && data.success) {
-          toast({
-            title: "Product Added",
-            description: `Added: ${data.productInfo.title || 'Product'}`,
-          });
-          
-          onUploadSuccess?.();
-          onOpenChange(false);
-        } else {
-          toast({
-            title: "Product Not Found",
-            description: "Could not find product information for this barcode",
-            variant: "destructive"
-          });
+          if (!error && data?.success) {
+            toast({
+              title: "Product Added",
+              description: `Added: ${data.productInfo.title || 'Product'}`,
+            });
+            handledByServer = true;
+            onUploadSuccess?.();
+            onOpenChange(false);
+          }
+        } catch (err) {
+          console.warn('lookup-product failed, using client fallback', err);
+        }
+
+        // Client-side fallback lookup (OpenLibrary / UPCitemdb trial)
+        if (!handledByServer) {
+          let hit: any = null;
+          try {
+            if (code.startsWith('978') || code.startsWith('979')) {
+              const r = await fetch(`https://openlibrary.org/isbn/${code}.json`);
+              if (r.ok) {
+                const d = await r.json();
+                hit = { title: d.title || '', author: '', publisher: (d.publishers?.[0] || ''), isbn13: code };
+              }
+            } else {
+              const upc = code.length === 12 ? code : (code.length === 13 && code.startsWith('0') ? code.slice(1) : code);
+              const r2 = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${upc}`);
+              if (r2.ok) {
+                const d2 = await r2.json();
+                const item = d2?.items?.[0];
+                if (item) hit = { title: item.title || '', publisher: item.brand || item.publisher || '' };
+              }
+            }
+          } catch (e) {
+            console.warn('Client lookup error:', e);
+          }
+
+          if (hit) {
+            toast({ title: 'Product', description: hit.title || 'Found' });
+            // TODO: Set fields from `hit` if/when form fields are added
+          } else {
+            toast({ title: 'Not found', description: 'Use OCR / add-on code', variant: 'destructive' });
+          }
         }
       } else {
         setError('No code detected.');
