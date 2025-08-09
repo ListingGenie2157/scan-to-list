@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -7,7 +7,6 @@ import { Upload, Camera, X, FileImage, CheckCircle, AlertTriangle, Settings } fr
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-
 import { Capacitor } from "@capacitor/core";
 import { BatchSettingsModal } from "./BatchSettingsModal";
 
@@ -42,6 +41,9 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
     autoGenerateTitle: true,
     autoGeneratePrice: true
   });
+  const [barcode, setBarcode] = useState('');
+  const [scanning, setScanning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -89,57 +91,38 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  const handleBarcodeScan = async () => {
-    if (!Capacitor.isNativePlatform()) {
-      toast({
-        title: "Not Available",
-        description: "Barcode scanning is only available on mobile devices",
-        variant: "destructive"
-      });
+  const startScan = useCallback(async () => {
+    setError(null);
+    const Scanner = await getScanner();
+    if (!Scanner) {
+      setError('Barcode scanning only works on the Android/iOS app.');
+      return;
+    }
+
+    // Ask for permission
+    const perm = await Scanner.checkPermission({ force: true });
+    if (!perm.granted) {
+      setError('Camera permission denied.');
       return;
     }
 
     try {
-      // Check permissions
-      const Scanner = await getScanner();
-      if (!Scanner) return;
-
-      const status = await Scanner.checkPermission({ force: true });
-      
-      if (!status.granted) {
-        toast({
-          title: "Permission Denied",
-          description: "Camera permission is required for barcode scanning",
-          variant: "destructive"
-        });
-        return;
-      }
-
-      setIsProcessing(true);
-      
-      // Hide background elements
-      document.body.classList.add('barcode-scanner-active');
-      
-      await Scanner.hideBackground();
-      const result = await Scanner.startScan();
+      setScanning(true);
+      await Scanner.hideBackground(); // optional, makes the camera fullscreen
+      const result = await Scanner.startScan(); // blocking call until scan or cancel
       await Scanner.showBackground();
       await Scanner.stopScan();
-      if (result.hasContent) {
-        toast({
-          title: "Barcode Scanned",
-          description: "Looking up product information...",
-        });
+      setScanning(false);
 
+      if (result?.hasContent && result.content) {
+        setBarcode(result.content);
+        
         // Call our edge function to look up product information
         const { data, error } = await supabase.functions.invoke('lookup-product', {
           body: { barcode: result.content }
         });
 
-        if (error) {
-          throw error;
-        }
-
-        if (data.success) {
+        if (!error && data.success) {
           toast({
             title: "Product Added",
             description: `Added: ${data.productInfo.title || 'Product'}`,
@@ -154,24 +137,16 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
             variant: "destructive"
           });
         }
+      } else {
+        setError('No code detected.');
       }
-    } catch (error) {
-      console.error('Barcode scanning error:', error);
-      toast({
-        title: "Scanning Error",
-        description: "Failed to scan barcode. Please try again.",
-        variant: "destructive"
-      });
-    } finally {
-      setIsProcessing(false);
-      document.body.classList.remove('barcode-scanner-active');
-      const Scanner = await getScanner();
-      if (Scanner) {
-        await Scanner.showBackground();
-        await Scanner.stopScan();
-      }
-    };
-  };
+    } catch (e: any) {
+      setScanning(false);
+      await Scanner.showBackground().catch(() => {});
+      await Scanner.stopScan().catch(() => {});
+      setError(e?.message ?? 'Scan failed.');
+    }
+  }, [onUploadSuccess, onOpenChange, toast]);
 
   const startProcessing = async () => {
     // Debug: Check authentication state
@@ -433,14 +408,26 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
           <div className="text-center pt-4 border-t">
             <p className="text-sm text-muted-foreground mb-3">Or scan a barcode</p>
             <Button
-              onClick={handleBarcodeScan}
+              onClick={startScan}
               variant="outline"
               className="w-full"
-              disabled={isProcessing}
+              disabled={scanning || isProcessing}
             >
               <Camera className="w-4 h-4 mr-2" />
-              {Capacitor.isNativePlatform() ? 'Scan Barcode (Books & Magazines)' : 'Scan Barcode (Mobile App Only)'}
+              {scanning ? 'Scanning...' : (Capacitor.isNativePlatform() ? 'Scan Barcode (Books & Magazines)' : 'Scan Barcode (Mobile App Only)')}
             </Button>
+            
+            {/* Show error if any */}
+            {error && (
+              <p className="mt-2 text-destructive text-sm">{error}</p>
+            )}
+            
+            {/* Show scanned barcode if any */}
+            {barcode && (
+              <div className="mt-2 p-2 bg-muted rounded text-sm">
+                <strong>Scanned:</strong> {barcode}
+              </div>
+            )}
           </div>
 
           {/* Uploaded Files */}
