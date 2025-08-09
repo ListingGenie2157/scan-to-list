@@ -119,7 +119,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
         
         // Call our edge function to look up product information
         const { data, error } = await supabase.functions.invoke('lookup-product', {
-          body: { barcode: result.content }
+          body: { barcode: result.content, batchSettings }
         });
 
         if (!error && data.success) {
