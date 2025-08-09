@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -48,6 +48,17 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
   const { toast } = useToast();
   const { user } = useAuth();
   const isNative = Capacitor.getPlatform() !== 'web';
+
+  useEffect(() => {
+    return () => {
+      (async () => {
+        const Scanner = await getScanner();
+        if (!Scanner) return;
+        await Scanner.showBackground().catch(() => {});
+        await Scanner.stopScan().catch(() => {});
+      })();
+    };
+  }, []);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
