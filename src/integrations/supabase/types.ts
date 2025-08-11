@@ -270,6 +270,7 @@ export type Database = {
       items: {
         Row: {
           authors: Json | null
+          bundle_id: string | null
           categories: Json | null
           cover_url_ext: string | null
           created_at: string | null
@@ -290,6 +291,7 @@ export type Database = {
         }
         Insert: {
           authors?: Json | null
+          bundle_id?: string | null
           categories?: Json | null
           cover_url_ext?: string | null
           created_at?: string | null
@@ -310,6 +312,7 @@ export type Database = {
         }
         Update: {
           authors?: Json | null
+          bundle_id?: string | null
           categories?: Json | null
           cover_url_ext?: string | null
           created_at?: string | null
@@ -328,7 +331,15 @@ export type Database = {
           user_id?: string | null
           year?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "items_bundle_id_fkey"
+            columns: ["bundle_id"]
+            isOneToOne: false
+            referencedRelation: "bundles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       listing_queues: {
         Row: {
