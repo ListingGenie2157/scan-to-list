@@ -139,13 +139,22 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
           });
 
           if (!error && data?.success) {
-            toast({
-              title: "Product Added",
-              description: `Added: ${data.productInfo.title || 'Product'}`,
-            });
-            handledByServer = true;
-            onUploadSuccess?.();
-            onOpenChange(false);
+            if (data.productInfo?.type === 'book') {
+              toast({
+                title: "Product Added",
+                description: `Added: ${data.productInfo.title || 'Product'}`,
+              });
+              handledByServer = true;
+              onUploadSuccess?.();
+              onOpenChange(false);
+            } else {
+              // Non-book: leave for OCR/manual entry
+              toast({
+                title: "Barcode recognized",
+                description: "Non-book item. Use OCR/manual to continue.",
+              });
+              handledByServer = true;
+            }
           }
         } catch (err) {
           console.warn('lookup-product failed, using client fallback', err);
@@ -176,13 +185,22 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
       });
 
       if (!error && data?.success) {
-        toast({
-          title: "Product Added",
-          description: `Added: ${data.productInfo.title || 'Product'}`,
-        });
-        handledByServer = true;
-        onUploadSuccess?.();
-        onOpenChange(false);
+        if (data.productInfo?.type === 'book') {
+          toast({
+            title: "Product Added",
+            description: `Added: ${data.productInfo.title || 'Product'}`,
+          });
+          handledByServer = true;
+          onUploadSuccess?.();
+          onOpenChange(false);
+        } else {
+          // Non-book: leave for OCR/manual entry
+          toast({
+            title: "Barcode recognized",
+            description: "Non-book item. Use OCR/manual to continue.",
+          });
+          handledByServer = true;
+        }
       }
     } catch (err) {
       console.warn('lookup-product error', err);
