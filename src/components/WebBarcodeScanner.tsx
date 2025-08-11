@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BarcodeFormat, DecodeHintType } from "@zxing/library";
 
 export default function WebBarcodeScanner({ onCode, onClose }: {
   onCode: (c: string) => void;
@@ -8,7 +9,9 @@ export default function WebBarcodeScanner({ onCode, onClose }: {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
-    const reader = new BrowserMultiFormatReader();
+    const hints = new Map();
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13, BarcodeFormat.UPC_A]);
+    const reader = new BrowserMultiFormatReader(hints);
     let controls: any;
     (async () => {
       controls = await reader.decodeFromVideoDevice(
