@@ -283,6 +283,7 @@ export type Database = {
           quantity: number | null
           source: string | null
           status: string | null
+          suggested_price: number | null
           title: string | null
           type: string | null
           updated_at: string | null
@@ -304,6 +305,7 @@ export type Database = {
           quantity?: number | null
           source?: string | null
           status?: string | null
+          suggested_price?: number | null
           title?: string | null
           type?: string | null
           updated_at?: string | null
@@ -325,6 +327,7 @@ export type Database = {
           quantity?: number | null
           source?: string | null
           status?: string | null
+          suggested_price?: number | null
           title?: string | null
           type?: string | null
           updated_at?: string | null

@@ -10,6 +10,7 @@ export type LookupMeta = {
   coverUrl: string | null;
   description?: string | null;
   categories?: string[] | null;
+  suggested_price?: number | null;
 } | null;
 
 export function normalizeScan(raw: string): string | null {
@@ -111,10 +112,33 @@ export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number>
       })
       .select()
       .single();
-    if (insErr) throw insErr;
-    return inserted!.id as number;
+    const newId = inserted!.id as number;
+    await maybeGenerateAndSavePrice(newId, meta);
+    return newId;
   }
 }
+
+async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<LookupMeta>) {
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-price', {
+      body: {
+        title: meta.title,
+        authors: meta.authors,
+        publisher: meta.publisher,
+        year: meta.year,
+        isbn13: meta.isbn13,
+      }
+    });
+    if (error) throw error;
+    const price = (data as any)?.price as number | undefined;
+    if (typeof price === 'number' && isFinite(price)) {
+      await supabase.from('items').update({ suggested_price: price }).eq('id', itemId);
+    }
+  } catch (e) {
+    console.warn('Price generation failed:', e);
+  }
+}
+
 
 export async function storeCover(itemId: number, coverUrl: string, type: 'book' | 'magazine' = 'book'): Promise<void> {
   const { data: userRes } = await supabase.auth.getUser();
