@@ -24,22 +24,28 @@ serve(async (req) => {
 
     console.log('Looking up barcode:', barcode);
 
-    // Try multiple APIs for product lookup
+    // Normalize the scanned barcode and decide lookup strategy
     let productInfo = null;
 
-    // Try Google Books API first (for ISBN barcodes)
-    if (barcode.length === 10 || barcode.length === 13) {
-      productInfo = await lookupGoogleBooks(barcode);
+    const norm = normalize(String(barcode || ''));
+    let codeToUse = norm.code;
+
+    // Convert ISBN10 to ISBN13 for lookups
+    if (norm.kind === 'ISBN10') {
+      codeToUse = isbn10to13(codeToUse);
     }
 
-    // If not found in Google Books, try UPC database
-    if (!productInfo) {
-      productInfo = await lookupUPCDatabase(barcode);
-    }
+    if (norm.kind === 'ISBN13') {
+      // Only perform book lookups for valid ISBN-13 (including EAN13+addon trimmed)
+      productInfo = await lookupGoogleBooks(codeToUse);
 
-    // If still not found, try Open Library
-    if (!productInfo && (barcode.length === 10 || barcode.length === 13)) {
-      productInfo = await lookupOpenLibrary(barcode);
+      // Fallback to Open Library if Google Books fails
+      if (!productInfo) {
+        productInfo = await lookupOpenLibrary(codeToUse);
+      }
+    } else {
+      // For UPCA or UNKNOWN we skip product database lookups
+      // and allow the client to fall back to OCR/manual entry
     }
 
     if (productInfo) {
@@ -104,6 +110,24 @@ serve(async (req) => {
     });
   }
 });
+
+function normalize(raw: string): { kind: 'ISBN13' | 'ISBN10' | 'UPCA' | 'UNKNOWN'; code: string } {
+  const s = raw.replace(/[\s-]/g, '');
+  const d = s.replace(/[^0-9Xx]/g, '');
+  if (d.length === 18 && (d.startsWith('978') || d.startsWith('979'))) return { kind: 'ISBN13', code: d.slice(0, 13) }; // EAN13+EAN5
+  if (d.length === 13 && (d.startsWith('978') || d.startsWith('979'))) return { kind: 'ISBN13', code: d };
+  if (d.length === 10) return { kind: 'ISBN10', code: d.toUpperCase() };
+  if (d.length === 12) return { kind: 'UPCA', code: d };
+  return { kind: 'UNKNOWN', code: d };
+}
+
+function isbn10to13(isbn10: string): string {
+  const core = '978' + isbn10.slice(0, 9);
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += (+core[i]) * (i % 2 ? 3 : 1);
+  const check = (10 - (sum % 10)) % 10;
+  return core + check;
+}
 
 async function lookupGoogleBooks(isbn: string) {
   try {
