@@ -190,7 +190,19 @@ export const Dashboard = () => {
                 <CardDescription>Get started with your daily workflow</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Button 
+                    variant="upload" 
+                    size="lg" 
+                    onClick={() => {
+                      setAutoOpenScanner(true);
+                      setShowUploadModal(true);
+                    }}
+                    className="h-20 flex-col"
+                  >
+                    <Camera className="w-6 h-6 mb-2" />
+                    Scan Barcode
+                  </Button>
                   <Button 
                     variant="gradient" 
                     size="lg" 
@@ -271,23 +283,6 @@ export const Dashboard = () => {
         )}
       </div>
 
-      {/* Sticky bottom Scan CTA */}
-      <div className="sticky bottom-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container mx-auto px-4 py-3">
-          <Button
-            variant="upload"
-            size="xl"
-            className="w-full"
-            onClick={() => {
-              setAutoOpenScanner(true);
-              setShowUploadModal(true);
-            }}
-          >
-            <Camera className="w-5 h-5 mr-2" />
-            Scan Barcode
-          </Button>
-        </div>
-      </div>
 
       <UploadModal 
         open={showUploadModal} 
