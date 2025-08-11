@@ -96,6 +96,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
 
   const handleScannedCode = useCallback(async (code: string) => {
     setBarcode(code);
+    setShowScan(false);
 
     try {
       const { data, error } = await supabase.functions.invoke('lookup-product', {
@@ -103,27 +104,34 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
       });
 
       if (!error && data?.success) {
-        if (data.productInfo?.type === 'book') {
-          toast({
-            title: "Product Added",
-            description: `Added: ${data.productInfo.title || 'Product'}`,
+        const info = data.productInfo || {};
+        const { error: insertError } = await supabase
+          .from('inventory_items')
+          .insert({
+            user_id: user?.id,
+            status: 'draft',
+            title: info.title || null,
+            publisher: info.publisher || null,
+            isbn: info.isbn13 || info.isbn || null,
+            suggested_category: info.type === 'book' ? 'book' : 'magazine'
           });
-          onUploadSuccess?.();
-          onOpenChange(false);
-        } else {
-          toast({
-            title: "Barcode recognized",
-            description: "Non-book item. Use OCR/manual to continue.",
-          });
+
+        if (insertError) {
+          toast({ title: 'Save failed', description: insertError.message, variant: 'destructive' });
+          return;
         }
+
+        toast({ title: 'Scan saved', description: code });
+        onUploadSuccess?.();
+        onOpenChange(false);
       } else {
         toast({ title: 'Product Not Found', description: 'Could not find product information for this barcode', variant: 'destructive' });
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('lookup-product error', err);
       toast({ title: 'Lookup Error', description: 'Failed to lookup product information', variant: 'destructive' });
     }
-  }, [onUploadSuccess, onOpenChange, toast]);
+  }, [onUploadSuccess, onOpenChange, toast, user]);
 
   useEffect(() => {
     if (open && autoOpenScanner) {

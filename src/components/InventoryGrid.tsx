@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download } from "lucide-react";
+import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { CreateListingModal } from "@/components/CreateListingModal";
@@ -186,7 +186,6 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       if (error) throw error;
 
       if (data?.download_url) {
-        // Create a temporary link to download the file
         const link = document.createElement('a');
         link.href = data.download_url;
         link.download = data.file_name;
@@ -198,6 +197,22 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       console.error('Error exporting CSV:', error);
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const deleteSelected = async () => {
+    if (selectedItems.length === 0) return;
+    if (!confirm(`Delete ${selectedItems.length} item(s)? This removes photos too.`)) return;
+
+    try {
+      const { error } = await supabase.functions.invoke('delete-items', {
+        body: { item_ids: selectedItems, hard: true }
+      });
+      if (error) throw error;
+      setInventory(items => items.filter(it => !selectedItems.includes(it.id)));
+      setSelectedItems([]);
+    } catch (err) {
+      console.error('Bulk delete failed', err);
     }
   };
 
@@ -556,10 +571,17 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               <Download className="w-4 h-4 mr-2" />
               {isExporting ? 'Exporting...' : `Export CSV (${selectedItems.length})`}
             </Button>
+            <Button 
+              variant="destructive" 
+              size="sm"
+              onClick={deleteSelected}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete ({selectedItems.length})
+            </Button>
           </>
         )}
       </div>
-
       {/* Inventory Grid */}
       {loading ? (
         <div className={getGridColumns()}>
