@@ -92,18 +92,6 @@ export const Dashboard = () => {
                 <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline ml-2">Upload Photos</span>
               </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  setAutoOpenScanner(true);
-                  setShowUploadModal(true);
-                }}
-                className="shadow-elevated"
-              >
-                <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline ml-2">Scan Barcode</span>
-              </Button>
               
               {/* User menu - simplified for mobile */}
               <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
