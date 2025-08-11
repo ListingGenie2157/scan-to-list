@@ -223,75 +223,54 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
 
         console.log('Photo record created:', photoData);
 
-        // Create inventory item
-        console.log('Creating inventory item...');
-        const { error: inventoryError } = await supabase
-          .from('inventory_items')
-          .insert({
-            user_id: user.id,
-            photo_id: photoData.id,
-            status: 'photographed'
+        // Process the book cover with OCR
+        try {
+          console.log('Starting OCR processing for:', photoData.id);
+          console.log('OCR request payload:', { 
+            photoId: photoData.id, 
+            imageUrl: publicUrl,
+            batchSettings: batchSettings
           });
-
-        if (inventoryError) {
-          console.error('Inventory error:', inventoryError);
-          toast({
-            title: "Inventory error",
-            description: `Failed to create inventory item: ${inventoryError.message}`,
-            variant: "destructive"
-          });
-        } else {
-          console.log('Inventory item created successfully');
           
-            // Process the book cover with OCR
-            try {
-              console.log('Starting OCR processing for:', photoData.id);
-              console.log('OCR request payload:', { 
-                photoId: photoData.id, 
-                imageUrl: publicUrl,
-                batchSettings: batchSettings
-              });
-              
-              const { data: ocrData, error: ocrError } = await supabase.functions.invoke('process-book-cover', {
-                body: { 
-                  photoId: photoData.id, 
-                  imageUrl: publicUrl,
-                  batchSettings: batchSettings
-                }
-              });
-
-            console.log('OCR response data:', ocrData);
-            console.log('OCR response error:', ocrError);
-
-            if (ocrError) {
-              console.error('OCR processing error:', ocrError);
-              toast({
-                title: "OCR Processing Failed",
-                description: `OCR failed: ${ocrError.message}. Check console for details.`,
-                variant: "destructive"
-              });
-            } else if (ocrData?.success) {
-              console.log('OCR processing successful:', ocrData);
-              toast({
-                title: "OCR Processing Complete",
-                description: `Extracted: ${ocrData.extractedInfo?.title || 'Title not found'}`,
-              });
-            } else {
-              console.warn('OCR processing returned no success flag:', ocrData);
-              toast({
-                title: "OCR Processing Warning", 
-                description: "OCR completed but may not have extracted all details.",
-                variant: "destructive"
-              });
+          const { data: ocrData, error: ocrError } = await supabase.functions.invoke('process-book-cover', {
+            body: { 
+              photoId: photoData.id, 
+              imageUrl: publicUrl,
+              batchSettings: batchSettings
             }
-          } catch (ocrError) {
-            console.error('OCR processing exception:', ocrError);
+          });
+
+          console.log('OCR response data:', ocrData);
+          console.log('OCR response error:', ocrError);
+
+          if (ocrError) {
+            console.error('OCR processing error:', ocrError);
             toast({
-              title: "OCR Exception",
-              description: `OCR failed with exception: ${ocrError.message}`,
+              title: "OCR Processing Failed",
+              description: `OCR failed: ${ocrError.message}. Check console for details.`,
+              variant: "destructive"
+            });
+          } else if (ocrData?.success) {
+            console.log('OCR processing successful:', ocrData);
+            toast({
+              title: "OCR Processing Complete",
+              description: `Extracted: ${ocrData.extractedInfo?.title || 'Title not found'}`,
+            });
+          } else {
+            console.warn('OCR processing returned no success flag:', ocrData);
+            toast({
+              title: "OCR Processing Warning", 
+              description: "OCR completed but may not have extracted all details.",
               variant: "destructive"
             });
           }
+        } catch (ocrError: any) {
+          console.error('OCR processing exception:', ocrError);
+          toast({
+            title: "OCR Exception",
+            description: `OCR failed with exception: ${ocrError.message}`,
+            variant: "destructive"
+          });
         }
       }
 
