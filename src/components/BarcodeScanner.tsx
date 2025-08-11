@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { Camera, Loader2 } from 'lucide-react';
+import WebBarcodeScanner from '@/components/WebBarcodeScanner';
 
 async function getScanner() {
   if (Capacitor.getPlatform() === 'web') return null;
@@ -19,6 +20,7 @@ interface BarcodeScannerProps {
 export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) => {
   const [isScanning, setIsScanning] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showWebScanner, setShowWebScanner] = useState(false);
   const { toast } = useToast();
 
   const checkPermissions = async () => {
@@ -42,15 +44,29 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
     return false;
   };
 
+  const handleWebCode = async (code: string) => {
+    setIsProcessing(true);
+    try {
+      await processBarcode(code);
+    } finally {
+      setIsProcessing(false);
+      setShowWebScanner(false);
+    }
+  };
+
   const startScan = async () => {
+    if (Capacitor.getPlatform() === 'web') {
+      setShowWebScanner(true);
+      return;
+    }
     setIsScanning(true);
     
     try {
       const Scanner = await getScanner();
       if (!Scanner) {
         toast({
-          title: "Mobile Only",
-          description: "Barcode scanning works in the mobile app.",
+          title: "Scanner Unavailable",
+          description: "Barcode scanning requires the mobile app.",
           variant: "destructive"
         });
         return;
@@ -157,9 +173,17 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   }
 
   return (
-    <Button onClick={startScan} className="w-full">
-      <Camera className="w-4 h-4 mr-2" />
-      Scan Barcode
-    </Button>
+    <>
+      <Button onClick={startScan} className="w-full">
+        <Camera className="w-4 h-4 mr-2" />
+        Scan Barcode
+      </Button>
+      {showWebScanner && (
+        <WebBarcodeScanner
+          onCode={handleWebCode}
+          onClose={() => setShowWebScanner(false)}
+        />
+      )}
+    </>
   );
 };
