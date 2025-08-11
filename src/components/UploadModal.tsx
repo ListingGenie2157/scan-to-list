@@ -109,7 +109,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
           .from('inventory_items')
           .insert({
             user_id: user?.id,
-            status: 'draft',
+            status: 'photographed',
             title: info.title || null,
             publisher: info.publisher || null,
             isbn: info.isbn13 || info.isbn || null,
