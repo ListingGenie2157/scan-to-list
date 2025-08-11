@@ -85,6 +85,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number>
         categories: meta.categories ?? null,
         cover_url_ext: meta.coverUrl ?? null,
         last_scanned_at: new Date().toISOString(),
+        type: meta.type ?? 'book',
       })
       .eq('id', existing.id);
     if (updErr) throw updErr;
@@ -94,7 +95,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number>
       .from('items')
       .insert({
         user_id: user.id,
-        type: 'book',
+        type: meta.type ?? 'book',
         isbn13: isbn,
         title: meta.title ?? null,
         publisher: meta.publisher ?? null,
@@ -115,7 +116,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number>
   }
 }
 
-export async function storeCover(itemId: number, coverUrl: string): Promise<void> {
+export async function storeCover(itemId: number, coverUrl: string, type: 'book' | 'magazine' = 'book'): Promise<void> {
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes?.user;
   if (!user) throw new Error('Not authenticated');
@@ -128,7 +129,7 @@ export async function storeCover(itemId: number, coverUrl: string): Promise<void
   const thumbBlob = await createThumbnail(blob, 320);
 
   const ext = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
-  const basePath = `${userId}/items/${itemId}`;
+  const basePath = `${userId}/${type}/${itemId}`;
   const fileName = `cover-${Date.now()}.${ext}`;
   const thumbName = `cover-${Date.now()}-thumb.webp`;
 

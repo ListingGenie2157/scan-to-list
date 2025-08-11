@@ -85,7 +85,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
       const itemId = await upsertItem(meta);
       if (mirrorCovers && meta.coverUrl) {
         try {
-          await storeCover(itemId, meta.coverUrl);
+          await storeCover(itemId, meta.coverUrl, 'book');
         } catch (e) {
           console.warn('Cover mirror failed:', e);
         }

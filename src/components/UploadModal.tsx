@@ -11,8 +11,10 @@ import { BatchSettingsModal } from "./BatchSettingsModal";
 import WebBarcodeScanner from "@/components/WebBarcodeScanner";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { normalizeScan, lookupIsbn, upsertItem, storeCover } from "@/lib/scanning";
 import { useScannerSettings } from "@/hooks/useScannerSettings";
+import { useItemTypeSetting } from "@/hooks/useItemTypeSetting";
 
 
 interface BatchSettings {
@@ -48,6 +50,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
   const { toast } = useToast();
   const { user } = useAuth();
   const { mirrorCovers, setMirrorCovers } = useScannerSettings();
+  const { itemType, setItemType } = useItemTypeSetting();
 
 
   const handleDrag = (e: React.DragEvent) => {
@@ -171,7 +174,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
         setProcessingProgress(Math.round((i / totalFiles) * 90));
         
         // Upload to storage
-        const fileName = `${user.id}/${Date.now()}-${file.name}`;
+        const baseFolder = itemType === 'magazine' ? 'magazine' : 'book';
+        const fileName = `${user.id}/${baseFolder}/${Date.now()}-${file.name}`;
         console.log('Uploading to storage:', fileName);
         
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -387,10 +391,24 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
               <Camera className="w-4 h-4 mr-2" />
               Scan Barcode
             </Button>
-            
-            {/* Show error if any */}
-            
-            {/* Show scanned barcode if any */}
+            <div className="mt-3 flex items-center justify-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Item Type</Label>
+                <Select value={itemType} onValueChange={(v) => setItemType(v as 'book' | 'magazine')}>
+                  <SelectTrigger className="w-40 bg-background">
+                    <SelectValue placeholder="Item Type" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[60] bg-popover">
+                    <SelectItem value="book">Book</SelectItem>
+                    <SelectItem value="magazine">Magazine</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch id="mirror-covers-upload" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
+                <Label htmlFor="mirror-covers-upload">Mirror external covers to storage</Label>
+              </div>
+            </div>
             {barcode && (
               <div className="mt-2 p-2 bg-muted rounded text-sm">
                 <strong>Scanned:</strong> {barcode}
