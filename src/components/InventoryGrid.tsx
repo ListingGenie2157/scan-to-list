@@ -544,37 +544,41 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {selectedItems.length > 0 && (
           <>
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => setIsBulkEditModalOpen(true)}
+              onClick={handleExportCSV}
+              disabled={isExporting}
+              className="w-full sm:w-auto"
             >
-              <Edit3 className="w-4 h-4 mr-2" />
-              Bulk Edit ({selectedItems.length})
+              <Download className="w-4 h-4 mr-2" />
+              {isExporting ? 'Exporting...' : `Export CSV (${selectedItems.length})`}
             </Button>
             <Button 
               variant="outline" 
               size="sm"
               onClick={() => setIsBulkListingModalOpen(true)}
+              className="w-full sm:w-auto"
             >
               Bulk Create Listings ({selectedItems.length})
             </Button>
             <Button 
               variant="outline" 
               size="sm"
-              onClick={handleExportCSV}
-              disabled={isExporting}
+              onClick={() => setIsBulkEditModalOpen(true)}
+              className="w-full sm:w-auto"
             >
-              <Download className="w-4 h-4 mr-2" />
-              {isExporting ? 'Exporting...' : `Export CSV (${selectedItems.length})`}
+              <Edit3 className="w-4 h-4 mr-2" />
+              Bulk Edit ({selectedItems.length})
             </Button>
             <Button 
               variant="destructive" 
               size="sm"
               onClick={deleteSelected}
+              className="w-full sm:w-auto"
             >
               <Trash2 className="w-4 h-4 mr-2" />
               Delete ({selectedItems.length})
