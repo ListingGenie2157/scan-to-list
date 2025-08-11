@@ -7,6 +7,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
+import { ConnectEbayButton } from "./ConnectEbayButton";
 
 export const Dashboard = () => {
   const { user, signOut } = useAuth();
@@ -214,10 +215,8 @@ export const Dashboard = () => {
                     <Package className="w-6 h-6 mb-2" />
                     Create Listings
                   </Button>
-                  <Button variant="outline" size="lg" className="h-20 flex-col">
-                    <TrendingUp className="w-6 h-6 mb-2" />
-                    View Analytics
-                  </Button>
+                  {/* eBay Connect */}
+                  <ConnectEbayButton />
                 </div>
               </CardContent>
             </Card>

@@ -5,3 +5,12 @@ verify_jwt = false
 
 [functions.ebay-account-deletion]
 verify_jwt = false
+
+[functions.ebay-oauth-start]
+verify_jwt = true
+
+[functions.ebay-oauth-callback]
+verify_jwt = false
+
+[functions.ebay-pricing]
+verify_jwt = true
