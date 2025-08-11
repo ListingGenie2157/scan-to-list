@@ -54,18 +54,30 @@ export default function WebBarcodeScanner({ onCode, onClose, continuous = false,
     return () => controls?.stop?.();
   }, [onCode, onClose, continuous]);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   return (
-    <div style={{ position: "fixed", inset: 0, background: "#000", zIndex: 9999 }}>
+    <div
+      onClick={onClose}
+      style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.9)", zIndex: 9999 }}
+    >
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
+        onClick={(e) => e.stopPropagation()}
         style={{ width: "100%", height: "100%", objectFit: "cover" }}
       />
       <button
-        onClick={onClose}
-        style={{ position: "absolute", top: 12, right: 12, padding: "8px 12px" }}
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        style={{ position: "absolute", top: 12, right: 12, padding: "8px 12px", background: "rgba(17,17,17,0.9)", color: "#fff", border: "1px solid rgba(255,255,255,0.2)", borderRadius: 8 }}
       >
         Close
       </button>
