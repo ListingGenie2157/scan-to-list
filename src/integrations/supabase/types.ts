@@ -93,6 +93,41 @@ export type Database = {
           },
         ]
       }
+      extractions: {
+        Row: {
+          confidence: number | null
+          created_at: string | null
+          id: number
+          item_id: number | null
+          ocr_text: string | null
+          parsed_json: Json | null
+        }
+        Insert: {
+          confidence?: number | null
+          created_at?: string | null
+          id?: number
+          item_id?: number | null
+          ocr_text?: string | null
+          parsed_json?: Json | null
+        }
+        Update: {
+          confidence?: number | null
+          created_at?: string | null
+          id?: number
+          item_id?: number | null
+          ocr_text?: string | null
+          parsed_json?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extractions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inventory_items: {
         Row: {
           all_visible_text: string | null
@@ -232,6 +267,69 @@ export type Database = {
           },
         ]
       }
+      items: {
+        Row: {
+          authors: Json | null
+          categories: Json | null
+          cover_url_ext: string | null
+          created_at: string | null
+          description: string | null
+          id: number
+          isbn10: string | null
+          isbn13: string | null
+          last_scanned_at: string | null
+          publisher: string | null
+          quantity: number | null
+          source: string | null
+          status: string | null
+          title: string | null
+          type: string | null
+          updated_at: string | null
+          user_id: string | null
+          year: string | null
+        }
+        Insert: {
+          authors?: Json | null
+          categories?: Json | null
+          cover_url_ext?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: number
+          isbn10?: string | null
+          isbn13?: string | null
+          last_scanned_at?: string | null
+          publisher?: string | null
+          quantity?: number | null
+          source?: string | null
+          status?: string | null
+          title?: string | null
+          type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          year?: string | null
+        }
+        Update: {
+          authors?: Json | null
+          categories?: Json | null
+          cover_url_ext?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: number
+          isbn10?: string | null
+          isbn13?: string | null
+          last_scanned_at?: string | null
+          publisher?: string | null
+          quantity?: number | null
+          source?: string | null
+          status?: string | null
+          title?: string | null
+          type?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+          year?: string | null
+        }
+        Relationships: []
+      }
       listing_queues: {
         Row: {
           created_at: string | null
@@ -280,32 +378,44 @@ export type Database = {
       photos: {
         Row: {
           batch_id: string | null
+          created_at: string | null
           file_name: string
           file_size: number | null
           id: string
+          item_id: number | null
           public_url: string | null
           storage_path: string
+          thumb_url: string | null
           uploaded_at: string | null
+          url_public: string | null
           user_id: string | null
         }
         Insert: {
           batch_id?: string | null
+          created_at?: string | null
           file_name: string
           file_size?: number | null
           id?: string
+          item_id?: number | null
           public_url?: string | null
           storage_path: string
+          thumb_url?: string | null
           uploaded_at?: string | null
+          url_public?: string | null
           user_id?: string | null
         }
         Update: {
           batch_id?: string | null
+          created_at?: string | null
           file_name?: string
           file_size?: number | null
           id?: string
+          item_id?: number | null
           public_url?: string | null
           storage_path?: string
+          thumb_url?: string | null
           uploaded_at?: string | null
+          url_public?: string | null
           user_id?: string | null
         }
         Relationships: [
@@ -314,6 +424,13 @@ export type Database = {
             columns: ["batch_id"]
             isOneToOne: false
             referencedRelation: "processing_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "photos_item_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "items"
             referencedColumns: ["id"]
           },
           {
