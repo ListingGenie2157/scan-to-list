@@ -7,15 +7,9 @@ import { Upload, Camera, X, FileImage, CheckCircle, Settings } from "lucide-reac
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Capacitor } from "@capacitor/core";
 import { BatchSettingsModal } from "./BatchSettingsModal";
 import WebBarcodeScanner from "@/components/WebBarcodeScanner";
 
-async function getScanner() {
-  if (Capacitor.getPlatform() === 'web') return null;
-  const mod = await import('@capacitor-community/barcode-scanner');
-  return mod.BarcodeScanner;
-}
 
 interface BatchSettings {
   defaultCategory: string;
@@ -44,24 +38,12 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
     autoGeneratePrice: true
   });
   const [barcode, setBarcode] = useState('');
-  const [scanning, setScanning] = useState(false);
-  const [showWebScanner, setShowWebScanner] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [showScan, setShowScan] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  const isNative = Capacitor.getPlatform() !== 'web';
+  
 
-  useEffect(() => {
-    return () => {
-      (async () => {
-        const Scanner = await getScanner();
-        if (!Scanner) return;
-        await Scanner.showBackground().catch(() => {});
-        await Scanner.stopScan().catch(() => {});
-      })();
-    };
-  }, []);
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -107,81 +89,16 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
     setFileInfos(prev => prev.filter((_, i) => i !== index));
   };
 
-  const startScan = useCallback(async () => {
-    setError(null);
-    const Scanner = await getScanner();
-    if (!Scanner) {
-      setError('Barcode scanning only works on the Android/iOS app.');
-      return;
-    }
+  const startScan = useCallback(() => {
+    setShowScan(true);
+  }, []);
 
-    // Ask for permission
-    const perm = await Scanner.checkPermission({ force: true });
-    if (!perm.granted) {
-      setError('Camera permission denied.');
-      return;
-    }
-
-    try {
-      setScanning(true);
-      await Scanner.hideBackground();
-      const result = await Scanner.startScan();
-
-      if (result?.hasContent && result.content) {
-        const code = result.content.trim();
-        setBarcode(code);
-        
-        // Try server-side lookup first (saves to DB when successful)
-        let handledByServer = false;
-        try {
-          const { data, error } = await supabase.functions.invoke('lookup-product', {
-            body: { barcode: code, batchSettings }
-          });
-
-          if (!error && data?.success) {
-            if (data.productInfo?.type === 'book') {
-              toast({
-                title: "Product Added",
-                description: `Added: ${data.productInfo.title || 'Product'}`,
-              });
-              handledByServer = true;
-              onUploadSuccess?.();
-              onOpenChange(false);
-            } else {
-              // Non-book: leave for OCR/manual entry
-              toast({
-                title: "Barcode recognized",
-                description: "Non-book item. Use OCR/manual to continue.",
-              });
-              handledByServer = true;
-            }
-          }
-        } catch (err) {
-          console.warn('lookup-product failed, using client fallback', err);
-        }
-
-        if (!handledByServer) {
-          toast({ title: 'Product Not Found', description: 'Could not find product information for this barcode', variant: 'destructive' });
-        }
-      } else {
-        setError('No code detected.');
-      }
-    } catch (e: any) {
-      setError(e?.message ?? 'Scan failed.');
-    } finally {
-      setScanning(false);
-      await Scanner.showBackground().catch(() => {});
-      await Scanner.stopScan().catch(() => {});
-    }
-  }, [onUploadSuccess, onOpenChange, toast]);
-
-  const handleWebCode = useCallback(async (code: string) => {
+  const handleScannedCode = useCallback(async (code: string) => {
     setBarcode(code);
 
-    let handledByServer = false;
     try {
       const { data, error } = await supabase.functions.invoke('lookup-product', {
-        body: { barcode: code, batchSettings }
+        body: { barcode: code }
       });
 
       if (!error && data?.success) {
@@ -190,26 +107,22 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
             title: "Product Added",
             description: `Added: ${data.productInfo.title || 'Product'}`,
           });
-          handledByServer = true;
           onUploadSuccess?.();
           onOpenChange(false);
         } else {
-          // Non-book: leave for OCR/manual entry
           toast({
             title: "Barcode recognized",
             description: "Non-book item. Use OCR/manual to continue.",
           });
-          handledByServer = true;
         }
+      } else {
+        toast({ title: 'Product Not Found', description: 'Could not find product information for this barcode', variant: 'destructive' });
       }
     } catch (err) {
       console.warn('lookup-product error', err);
+      toast({ title: 'Lookup Error', description: 'Failed to lookup product information', variant: 'destructive' });
     }
-
-    if (!handledByServer) {
-      toast({ title: 'Product Not Found', description: 'Could not find product information for this barcode', variant: 'destructive' });
-    }
-  }, [batchSettings, onUploadSuccess, onOpenChange, toast]);
+  }, [onUploadSuccess, onOpenChange, toast]);
 
   const startProcessing = async () => {
     // Debug: Check authentication state
@@ -472,19 +385,16 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
           <div className="text-center pt-4 border-t">
             <p className="text-sm text-muted-foreground mb-3">Or scan a barcode</p>
             <Button
-              onClick={() => { if (isNative) { startScan(); } else { setShowWebScanner(true); } }}
+              onClick={startScan}
               variant="outline"
               className="w-full"
-              disabled={scanning || isProcessing}
+              disabled={isProcessing}
             >
               <Camera className="w-4 h-4 mr-2" />
-              {scanning ? 'Scanning...' : 'Scan Barcode'}
+              Scan Barcode
             </Button>
             
             {/* Show error if any */}
-            {error && (
-              <p className="mt-2 text-destructive text-sm">{error}</p>
-            )}
             
             {/* Show scanned barcode if any */}
             {barcode && (
@@ -494,12 +404,12 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
             )}
           </div>
 
-          {!isNative && showWebScanner && (
-            <WebBarcodeScanner
-              onCode={async (c) => { await handleWebCode(c); }}
-              onClose={() => setShowWebScanner(false)}
-            />
-          )}
+            {showScan && (
+              <WebBarcodeScanner
+                onCode={handleScannedCode}
+                onClose={() => setShowScan(false)}
+              />
+            )}
 
 
           {/* Uploaded Files */}
