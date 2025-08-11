@@ -1,9 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
-
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,54 +44,23 @@ serve(async (req) => {
       // and allow the client to fall back to OCR/manual entry
     }
 
-    if (productInfo) {
-      // Initialize Supabase client
-      const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
+    // Read-only: no database writes performed here.
 
-      // Get user info from auth header
-      const authHeader = req.headers.get('authorization');
-      const token = authHeader?.replace('Bearer ', '');
-      
-      if (token) {
-        const { data: { user } } = await supabase.auth.getUser(token);
-        
-        if (user) {
-          // Save to inventory
-          const { data: inventoryItem, error: inventoryError } = await supabase
-            .from('inventory_items')
-            .insert({
-              user_id: user.id,
-              title: productInfo.title,
-              author: productInfo.author,
-              publisher: productInfo.publisher,
-              publication_year: productInfo.publication_year,
-              isbn: productInfo.isbn,
-              genre: productInfo.genre,
-              suggested_category: productInfo.category,
-              suggested_price: productInfo.suggested_price,
-              description: productInfo.description,
-              format: productInfo.format,
-              status: 'analyzed',
-              confidence_score: 0.9,
-              extracted_text: { source: 'barcode', barcode: barcode }
-            })
-            .select()
-            .single();
 
-          if (inventoryError) {
-            console.error('Database error:', inventoryError);
-          } else {
-            console.log('Saved inventory item:', inventoryItem);
-          }
-        }
-      }
-    }
+    // Build a simplified meta response (or null if not found)
+    const meta = productInfo ? {
+      type: productInfo.type,
+      isbn13: codeToUse,
+      title: productInfo.title ?? null,
+      authors: productInfo.authors ?? null,
+      publisher: productInfo.publisher ?? null,
+      year: productInfo.publication_year ?? null,
+      coverUrl: productInfo.coverUrl ?? null,
+      description: productInfo.description ?? null,
+      categories: productInfo.categories ?? null,
+    } : null;
 
-    return new Response(JSON.stringify({ 
-      success: !!productInfo, 
-      productInfo: productInfo || null,
-      barcode 
-    }), {
+    return new Response(JSON.stringify(meta), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
@@ -138,16 +103,13 @@ async function lookupGoogleBooks(isbn: string) {
       const book = data.items[0].volumeInfo;
       return {
         type: 'book',
-        title: book.title,
-        author: book.authors ? book.authors.join(', ') : null,
-        publisher: book.publisher,
-        publication_year: book.publishedDate ? parseInt(book.publishedDate.substring(0, 4)) : null,
-        isbn: isbn,
-        description: book.description,
-        category: book.categories ? book.categories[0] : 'Books',
-        format: 'Book',
-        genre: book.categories ? book.categories.join(', ') : null,
-        suggested_price: null
+        title: book.title ?? null,
+        authors: Array.isArray(book.authors) ? book.authors : (book.authors ? [book.authors] : null),
+        publisher: book.publisher ?? null,
+        publication_year: book.publishedDate ? book.publishedDate.substring(0, 4) : null,
+        description: book.description ?? null,
+        categories: Array.isArray(book.categories) ? book.categories : (book.categories ? [book.categories] : null),
+        coverUrl: book.imageLinks?.thumbnail || book.imageLinks?.smallThumbnail || null,
       };
     }
   } catch (error) {
@@ -164,18 +126,17 @@ async function lookupOpenLibrary(isbn: string) {
     const bookKey = `ISBN:${isbn}`;
     if (data[bookKey]) {
       const book = data[bookKey];
+      // Try to extract a 4-digit year from publish_date
+      const yearMatch = typeof book.publish_date === 'string' ? book.publish_date.match(/\d{4}/) : null;
       return {
         type: 'book',
-        title: book.title,
-        author: book.authors ? book.authors.map((a: any) => a.name).join(', ') : null,
-        publisher: book.publishers ? book.publishers[0].name : null,
-        publication_year: book.publish_date ? parseInt(book.publish_date) : null,
-        isbn: isbn,
-        description: null,
-        category: book.subjects ? book.subjects[0].name : 'Books',
-        format: 'Book',
-        genre: book.subjects ? book.subjects.map((s: any) => s.name).join(', ') : null,
-        suggested_price: null
+        title: book.title ?? null,
+        authors: book.authors ? book.authors.map((a: any) => a.name) : null,
+        publisher: book.publishers ? book.publishers[0]?.name ?? null : null,
+        publication_year: yearMatch ? yearMatch[0] : null,
+        description: book.description ?? null,
+        categories: book.subjects ? book.subjects.map((s: any) => s.name) : null,
+        coverUrl: (book.cover && (book.cover.medium || book.cover.large)) || `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`,
       };
     }
   } catch (error) {

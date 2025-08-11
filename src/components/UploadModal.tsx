@@ -99,41 +99,84 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
     setShowScan(false);
 
     try {
-      const { data, error } = await supabase.functions.invoke('lookup-product', {
+      const { data: meta, error } = await supabase.functions.invoke('lookup-product', {
         body: { barcode: code }
       });
+      if (error) throw error;
 
-      if (!error && data?.success) {
-        const info = data.productInfo || {};
-        const { error: insertError } = await supabase
-          .from('inventory_items')
-          .insert({
-            user_id: user?.id,
-            status: 'photographed',
-            title: info.title || null,
-            author: info.author || null,
-            publisher: info.publisher || null,
-            isbn: info.isbn13 || info.isbn || null,
-            suggested_price: info.suggested_price ?? null,
-            suggested_category: info.type === 'book' ? 'book' : 'magazine'
-          });
-
-        if (insertError) {
-          toast({ title: 'Save failed', description: insertError.message, variant: 'destructive' });
-          return;
-        }
-
-        toast({ title: 'Scan saved', description: code });
-        onUploadSuccess?.();
-        onOpenChange(false);
-      } else {
-        toast({ title: 'Product Not Found', description: 'Could not find product information for this barcode', variant: 'destructive' });
+      if (!meta || meta.type !== 'book') {
+        toast({ title: 'Not a book or not found', description: 'No details found for this barcode', variant: 'destructive' });
+        return;
       }
+
+      const { data: userRes } = await supabase.auth.getUser();
+      const authUser = userRes?.user;
+      if (!authUser) {
+        toast({ title: 'Not signed in', description: 'Please sign in to save scans', variant: 'destructive' });
+        return;
+      }
+
+      const isbn = meta.isbn13;
+      let itemId: number | undefined;
+
+      const { data: existing, error: exErr } = await supabase
+        .from('items')
+        .select('id, quantity')
+        .eq('user_id', authUser.id)
+        .eq('isbn13', isbn)
+        .maybeSingle();
+      if (exErr && exErr.code !== 'PGRST116') throw exErr; // ignore no rows
+
+      if (existing) {
+        const { error: updErr } = await supabase
+          .from('items')
+          .update({
+            quantity: (existing.quantity ?? 1) + 1,
+            title: meta.title,
+            publisher: meta.publisher,
+            authors: meta.authors ?? null,
+            year: meta.year ?? null,
+            description: meta.description ?? null,
+            categories: meta.categories ?? null,
+            cover_url_ext: meta.coverUrl ?? null,
+            last_scanned_at: new Date().toISOString(),
+          })
+          .eq('id', existing.id);
+        if (updErr) throw updErr;
+        itemId = existing.id as unknown as number;
+      } else {
+        const { data: inserted, error: insErr } = await supabase
+          .from('items')
+          .insert({
+            user_id: authUser.id,
+            type: 'book',
+            isbn13: isbn,
+            title: meta.title ?? null,
+            publisher: meta.publisher ?? null,
+            authors: meta.authors ?? null,
+            year: meta.year ?? null,
+            description: meta.description ?? null,
+            categories: meta.categories ?? null,
+            cover_url_ext: meta.coverUrl ?? null,
+            quantity: 1,
+            status: 'draft',
+            source: 'scan',
+            last_scanned_at: new Date().toISOString(),
+          })
+          .select()
+          .single();
+        if (insErr) throw insErr;
+        itemId = inserted!.id as number;
+      }
+
+      toast({ title: 'Scan saved', description: `${isbn} → ${meta.title || 'Untitled'}` });
+      onUploadSuccess?.();
+      onOpenChange(false);
     } catch (err: any) {
       console.warn('lookup-product error', err);
-      toast({ title: 'Lookup Error', description: 'Failed to lookup product information', variant: 'destructive' });
+      toast({ title: 'Lookup Error', description: 'Failed to lookup or save product', variant: 'destructive' });
     }
-  }, [onUploadSuccess, onOpenChange, toast, user]);
+  }, [onUploadSuccess, onOpenChange, toast]);
 
   useEffect(() => {
     if (open && autoOpenScanner) {
