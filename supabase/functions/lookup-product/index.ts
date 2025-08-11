@@ -137,6 +137,7 @@ async function lookupGoogleBooks(isbn: string) {
     if (data.items && data.items.length > 0) {
       const book = data.items[0].volumeInfo;
       return {
+        type: 'book',
         title: book.title,
         author: book.authors ? book.authors.join(', ') : null,
         publisher: book.publisher,
@@ -164,6 +165,7 @@ async function lookupOpenLibrary(isbn: string) {
     if (data[bookKey]) {
       const book = data[bookKey];
       return {
+        type: 'book',
         title: book.title,
         author: book.authors ? book.authors.map((a: any) => a.name).join(', ') : null,
         publisher: book.publishers ? book.publishers[0].name : null,
