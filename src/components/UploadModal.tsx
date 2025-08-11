@@ -156,6 +156,20 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
 
     if (filesRef.current.length === 0 || !user) {
       console.log('Cannot start processing: no files or no user', { files: filesRef.current.length, user: !!user });
+      if (filesRef.current.length === 0) {
+        toast({
+          title: "No photos selected",
+          description: "Please add photos to upload before continuing.",
+          variant: "destructive",
+        });
+      }
+      if (!user) {
+        toast({
+          title: "Sign in required",
+          description: "Please sign in to upload and process photos.",
+          variant: "destructive",
+        });
+      }
       return;
     }
     
