@@ -22,9 +22,10 @@ interface UploadModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUploadSuccess?: () => void;
+  autoOpenScanner?: boolean;
 }
 
-export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModalProps) => {
+export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScanner }: UploadModalProps) => {
   const [dragActive, setDragActive] = useState(false);
   const filesRef = useRef<File[]>([]);
   const [fileInfos, setFileInfos] = useState<{ name: string; size: number }[]>([]);
@@ -123,6 +124,12 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
       toast({ title: 'Lookup Error', description: 'Failed to lookup product information', variant: 'destructive' });
     }
   }, [onUploadSuccess, onOpenChange, toast]);
+
+  useEffect(() => {
+    if (open && autoOpenScanner) {
+      startScan();
+    }
+  }, [open, autoOpenScanner, startScan]);
 
   const startProcessing = async () => {
     // Debug: Check authentication state

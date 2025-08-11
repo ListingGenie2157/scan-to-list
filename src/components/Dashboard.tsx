@@ -11,6 +11,7 @@ import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
 export const Dashboard = () => {
   const { user, signOut } = useAuth();
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [autoOpenScanner, setAutoOpenScanner] = useState(false);
   const [showBundleSuggestions, setShowBundleSuggestions] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "inventory">("overview");
   const inventoryGridRef = useRef<{ refreshInventory: () => void }>(null);
@@ -90,6 +91,18 @@ export const Dashboard = () => {
               >
                 <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline ml-2">Upload Photos</span>
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  setAutoOpenScanner(true);
+                  setShowUploadModal(true);
+                }}
+                className="shadow-elevated"
+              >
+                <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="hidden sm:inline ml-2">Scan Barcode</span>
               </Button>
               
               {/* User menu - simplified for mobile */}
@@ -273,8 +286,9 @@ export const Dashboard = () => {
 
       <UploadModal 
         open={showUploadModal} 
-        onOpenChange={setShowUploadModal}
+        onOpenChange={(o) => { setShowUploadModal(o); if (!o) setAutoOpenScanner(false); }}
         onUploadSuccess={handleUploadSuccess}
+        autoOpenScanner={autoOpenScanner}
       />
       
       <BundleSuggestionsModal 
