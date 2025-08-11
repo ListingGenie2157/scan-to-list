@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Capacitor } from "@capacitor/core";
 import { BatchSettingsModal } from "./BatchSettingsModal";
+import WebBarcodeScanner from "@/components/WebBarcodeScanner";
 
 async function getScanner() {
   if (Capacitor.getPlatform() === 'web') return null;
@@ -43,6 +44,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
   });
   const [barcode, setBarcode] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [showWebScanner, setShowWebScanner] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -147,35 +149,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
           console.warn('lookup-product failed, using client fallback', err);
         }
 
-        // Client-side fallback lookup (OpenLibrary / UPCitemdb trial)
         if (!handledByServer) {
-          let hit: any = null;
-          try {
-            if (code.startsWith('978') || code.startsWith('979')) {
-              const r = await fetch(`https://openlibrary.org/isbn/${code}.json`);
-              if (r.ok) {
-                const d = await r.json();
-                hit = { title: d.title || '', author: '', publisher: (d.publishers?.[0] || ''), isbn13: code };
-              }
-            } else {
-              const upc = code.length === 12 ? code : (code.length === 13 && code.startsWith('0') ? code.slice(1) : code);
-              const r2 = await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${upc}`);
-              if (r2.ok) {
-                const d2 = await r2.json();
-                const item = d2?.items?.[0];
-                if (item) hit = { title: item.title || '', publisher: item.brand || item.publisher || '' };
-              }
-            }
-          } catch (e) {
-            console.warn('Client lookup error:', e);
-          }
-
-          if (hit) {
-            toast({ title: 'Product', description: hit.title || 'Found' });
-            // TODO: Set fields from `hit` if/when form fields are added
-          } else {
-            toast({ title: 'Not found', description: 'Use OCR / add-on code', variant: 'destructive' });
-          }
+          toast({ title: 'Product Not Found', description: 'Could not find product information for this barcode', variant: 'destructive' });
         }
       } else {
         setError('No code detected.');
@@ -188,6 +163,33 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
       await Scanner.stopScan().catch(() => {});
     }
   }, [onUploadSuccess, onOpenChange, toast]);
+
+  const handleWebCode = useCallback(async (code: string) => {
+    setBarcode(code);
+
+    let handledByServer = false;
+    try {
+      const { data, error } = await supabase.functions.invoke('lookup-product', {
+        body: { barcode: code, batchSettings }
+      });
+
+      if (!error && data?.success) {
+        toast({
+          title: "Product Added",
+          description: `Added: ${data.productInfo.title || 'Product'}`,
+        });
+        handledByServer = true;
+        onUploadSuccess?.();
+        onOpenChange(false);
+      }
+    } catch (err) {
+      console.warn('lookup-product error', err);
+    }
+
+    if (!handledByServer) {
+      toast({ title: 'Product Not Found', description: 'Could not find product information for this barcode', variant: 'destructive' });
+    }
+  }, [batchSettings, onUploadSuccess, onOpenChange, toast]);
 
   const startProcessing = async () => {
     // Debug: Check authentication state
@@ -449,13 +451,13 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
           <div className="text-center pt-4 border-t">
             <p className="text-sm text-muted-foreground mb-3">Or scan a barcode</p>
             <Button
-              onClick={startScan}
+              onClick={() => { if (isNative) { startScan(); } else { setShowWebScanner(true); } }}
               variant="outline"
               className="w-full"
               disabled={scanning || isProcessing}
             >
               <Camera className="w-4 h-4 mr-2" />
-              {scanning ? 'Scanning...' : (isNative ? 'Scan Barcode (Books & Magazines)' : 'Scan Barcode (Mobile App Only)')}
+              {scanning ? 'Scanning...' : 'Scan Barcode'}
             </Button>
             
             {/* Show error if any */}
@@ -470,6 +472,14 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
               </div>
             )}
           </div>
+
+          {!isNative && showWebScanner && (
+            <WebBarcodeScanner
+              onCode={async (c) => { await handleWebCode(c); }}
+              onClose={() => setShowWebScanner(false)}
+            />
+          )}
+
 
           {/* Uploaded Files */}
           {uploadedFiles.length > 0 && (
