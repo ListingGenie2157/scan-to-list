@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">scan-to-list</string>
+    <string name="title_activity_main">scan-to-list</string>
+    <string name="package_name">com.scanlist.app</string>
+    <string name="custom_url_scheme">com.scanlist.app</string>
+</resources>
