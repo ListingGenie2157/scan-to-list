@@ -109,10 +109,12 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
           .from('inventory_items')
           .insert({
             user_id: user?.id,
-            status: 'draft',
+            status: 'photographed',
             title: info.title || null,
+            author: info.author || null,
             publisher: info.publisher || null,
             isbn: info.isbn13 || info.isbn || null,
+            suggested_price: info.suggested_price ?? null,
             suggested_category: info.type === 'book' ? 'book' : 'magazine'
           });
 

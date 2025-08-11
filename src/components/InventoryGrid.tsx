@@ -360,7 +360,14 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
     // Default grid view
     return (
-      <Card key={item.id} className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}>
+      <Card 
+        key={item.id} 
+        className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        onClick={() => {
+          setSelectedItem(item);
+          setIsCreateListingModalOpen(true);
+        }}
+      >
         <CardContent className="p-4">
           <div className="space-y-3">
             {/* Selection Checkbox */}
@@ -368,6 +375,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               <Checkbox
                 checked={isSelected}
                 onCheckedChange={() => toggleItemSelection(item.id)}
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
             
@@ -422,9 +430,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 variant="outline" 
                 size="sm" 
                 className="flex-1"
-                onClick={() => {
-                  // TODO: Implement edit functionality
-                }}
+                onClick={(e) => { e.stopPropagation(); /* TODO: Implement edit */ }}
               >
                 Edit
               </Button>
@@ -432,7 +438,8 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 variant="default" 
                 size="sm" 
                 className="flex-1"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   setSelectedItem(item);
                   setIsCreateListingModalOpen(true);
                 }}
