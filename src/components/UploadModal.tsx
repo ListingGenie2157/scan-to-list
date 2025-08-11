@@ -32,7 +32,8 @@ interface UploadModalProps {
 
 export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModalProps) => {
   const [dragActive, setDragActive] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const filesRef = useRef<File[]>([]);
+  const [fileInfos, setFileInfos] = useState<{ name: string; size: number }[]>([]);
   const [processingProgress, setProcessingProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showBatchSettings, setShowBatchSettings] = useState(false);
@@ -77,12 +78,11 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
     e.stopPropagation();
     setDragActive(false);
 
-    const files = Array.from(e.dataTransfer.files).filter(file => 
-      file.type.startsWith('image/')
-    );
+    const files = Array.from(e.dataTransfer.files).filter(file => file.type.startsWith('image/'));
     
     if (files.length > 0) {
-      setUploadedFiles(prev => [...prev, ...files]);
+      filesRef.current.push(...files);
+      setFileInfos(prev => [...prev, ...files.map(f => ({ name: f.name, size: f.size }))]);
       toast({
         title: "Files added",
         description: `${files.length} images added for processing`,
@@ -93,7 +93,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const files = Array.from(e.target.files);
-      setUploadedFiles(prev => [...prev, ...files]);
+      filesRef.current.push(...files);
+      setFileInfos(prev => [...prev, ...files.map(f => ({ name: f.name, size: f.size }))]);
       toast({
         title: "Files selected",
         description: `${files.length} images selected for processing`,
@@ -102,7 +103,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
   };
 
   const removeFile = (index: number) => {
-    setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+    filesRef.current.splice(index, 1);
+    setFileInfos(prev => prev.filter((_, i) => i !== index));
   };
 
   const startScan = useCallback(async () => {
@@ -203,20 +205,20 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
       error: sessionError 
     });
 
-    if (uploadedFiles.length === 0 || !user) {
-      console.log('Cannot start processing: no files or no user', { files: uploadedFiles.length, user: !!user });
+    if (filesRef.current.length === 0 || !user) {
+      console.log('Cannot start processing: no files or no user', { files: filesRef.current.length, user: !!user });
       return;
     }
     
-    console.log('Starting processing for', uploadedFiles.length, 'files');
+    console.log('Starting processing for', filesRef.current.length, 'files');
     setIsProcessing(true);
     setProcessingProgress(0);
 
     try {
-      const totalFiles = uploadedFiles.length;
+      const totalFiles = filesRef.current.length;
       
       for (let i = 0; i < totalFiles; i++) {
-        const file = uploadedFiles[i];
+        const file = filesRef.current[i];
         console.log(`Processing file ${i + 1}/${totalFiles}:`, file.name);
         
         // Update progress
@@ -352,10 +354,11 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
       
       toast({
         title: "Processing complete!",
-        description: `${uploadedFiles.length} items added to inventory`,
+        description: `${fileInfos.length} items added to inventory`,
       });
       
-      setUploadedFiles([]);
+      filesRef.current = [];
+      setFileInfos([]);
       onOpenChange(false);
       
       // Call the success callback to refresh inventory and switch tabs
@@ -482,15 +485,15 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
 
 
           {/* Uploaded Files */}
-          {uploadedFiles.length > 0 && (
+          {fileInfos.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-medium">Selected Files ({uploadedFiles.length})</h3>
-                <Badge variant="outline">{uploadedFiles.length} images</Badge>
+                <h3 className="font-medium">Selected Files ({fileInfos.length})</h3>
+                <Badge variant="outline">{fileInfos.length} images</Badge>
               </div>
               
               <div className="max-h-48 overflow-y-auto space-y-2">
-                {uploadedFiles.map((file, index) => (
+                {fileInfos.map((file, index) => (
                   <div key={index} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg">
                     <FileImage className="w-4 h-4 text-muted-foreground" />
                     <div className="flex-1 min-w-0">
@@ -533,7 +536,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
           <div className="flex gap-3">
             <Button
               onClick={startProcessing}
-              disabled={uploadedFiles.length === 0 || isProcessing}
+              disabled={fileInfos.length === 0 || isProcessing}
               className="flex-1"
               variant="gradient"
             >
@@ -545,7 +548,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess }: UploadModal
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4 mr-2" />
-                  Process {uploadedFiles.length} Images
+                  Process {fileInfos.length} Images
                 </>
               )}
             </Button>

@@ -29,11 +29,10 @@ serve(async (req) => {
       .select(`
         id,
         title,
+        suggested_title,
         description,
-        publisher,
-        publication_year,
-        genre,
-        topic,
+        ebay_category_id,
+        condition_assessment,
         suggested_price,
         photos!inventory_items_photo_id_fkey(public_url)
       `)
@@ -57,25 +56,35 @@ serve(async (req) => {
     // Generate CSV headers
     const headers = [
       'Title',
-      'Description', 
-      'Publication Name',
-      'Publication Year',
-      'Genre',
-      'Topic',
-      'Picture URL',
-      'Starting Price'
+      'Description',
+      'CategoryID',
+      'ConditionID',
+      'StartPrice',
+      'Quantity',
+      'PicURL',
+      'Format',
+      'Duration',
+      'Location',
+      'ShippingProfile',
+      'ReturnProfile',
+      'PaymentProfile'
     ];
 
     // Generate CSV rows
-    const rows = items.map(item => [
-      item.title || '',
+    const rows = items.map((item: any) => [
+      item.title || item.suggested_title || '',
       item.description || '',
-      item.publisher || '',
-      item.publication_year || '',
-      item.genre || '',
-      item.topic || '',
+      item.ebay_category_id ?? '',
+      '', // ConditionID (left blank unless you map your conditions to eBay IDs)
+      item.suggested_price ?? '',
+      1,
       (item.photos && item.photos.public_url) || '',
-      item.suggested_price || ''
+      'FixedPrice',
+      'GTC',
+      '', // Location
+      '', // ShippingProfile
+      '', // ReturnProfile
+      ''  // PaymentProfile
     ]);
 
     // Convert to CSV format
