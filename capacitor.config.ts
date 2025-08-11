@@ -8,11 +8,6 @@ const config: CapacitorConfig = {
     url: 'https://8df2d048-f9db-4afe-90c6-9827cababee3.lovableproject.com?forceHideBadge=true',
     cleartext: true
   },
-  plugins: {
-    BarcodeScanner: {
-      androidActivityName: 'com.capacitor.barcodescanner.BarcodeScannerActivity'
-    }
-  }
 };
 
 export default config;
