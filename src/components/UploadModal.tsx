@@ -9,6 +9,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { BatchSettingsModal } from "./BatchSettingsModal";
 import WebBarcodeScanner from "@/components/WebBarcodeScanner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { normalizeScan, lookupIsbn, upsertItem, storeCover } from "@/lib/scanning";
+import { useScannerSettings } from "@/hooks/useScannerSettings";
 
 
 interface BatchSettings {
@@ -43,7 +47,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  
+  const { mirrorCovers, setMirrorCovers } = useScannerSettings();
 
 
   const handleDrag = (e: React.DragEvent) => {
@@ -99,84 +103,35 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
     setShowScan(false);
 
     try {
-      const { data: meta, error } = await supabase.functions.invoke('lookup-product', {
-        body: { barcode: code }
-      });
-      if (error) throw error;
+      const isbn13 = normalizeScan(code);
+      if (!isbn13) {
+        toast({ title: 'Invalid code', description: 'Only ISBN-13 (books) are supported.', variant: 'destructive' });
+        return;
+      }
 
+      const meta = await lookupIsbn(isbn13);
       if (!meta || meta.type !== 'book') {
         toast({ title: 'Not a book or not found', description: 'No details found for this barcode', variant: 'destructive' });
         return;
       }
 
-      const { data: userRes } = await supabase.auth.getUser();
-      const authUser = userRes?.user;
-      if (!authUser) {
-        toast({ title: 'Not signed in', description: 'Please sign in to save scans', variant: 'destructive' });
-        return;
+      const itemId = await upsertItem(meta);
+      if (mirrorCovers && meta.coverUrl) {
+        try {
+          await storeCover(itemId, meta.coverUrl);
+        } catch (e) {
+          console.warn('Cover mirror failed:', e);
+        }
       }
 
-      const isbn = meta.isbn13;
-      let itemId: number | undefined;
-
-      const { data: existing, error: exErr } = await supabase
-        .from('items')
-        .select('id, quantity')
-        .eq('user_id', authUser.id)
-        .eq('isbn13', isbn)
-        .maybeSingle();
-      if (exErr && exErr.code !== 'PGRST116') throw exErr; // ignore no rows
-
-      if (existing) {
-        const { error: updErr } = await supabase
-          .from('items')
-          .update({
-            quantity: (existing.quantity ?? 1) + 1,
-            title: meta.title,
-            publisher: meta.publisher,
-            authors: meta.authors ?? null,
-            year: meta.year ?? null,
-            description: meta.description ?? null,
-            categories: meta.categories ?? null,
-            cover_url_ext: meta.coverUrl ?? null,
-            last_scanned_at: new Date().toISOString(),
-          })
-          .eq('id', existing.id);
-        if (updErr) throw updErr;
-        itemId = existing.id as unknown as number;
-      } else {
-        const { data: inserted, error: insErr } = await supabase
-          .from('items')
-          .insert({
-            user_id: authUser.id,
-            type: 'book',
-            isbn13: isbn,
-            title: meta.title ?? null,
-            publisher: meta.publisher ?? null,
-            authors: meta.authors ?? null,
-            year: meta.year ?? null,
-            description: meta.description ?? null,
-            categories: meta.categories ?? null,
-            cover_url_ext: meta.coverUrl ?? null,
-            quantity: 1,
-            status: 'draft',
-            source: 'scan',
-            last_scanned_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-        if (insErr) throw insErr;
-        itemId = inserted!.id as number;
-      }
-
-      toast({ title: 'Scan saved', description: `${isbn} → ${meta.title || 'Untitled'}` });
+      toast({ title: 'Scan saved', description: `${isbn13} → ${meta.title || 'Untitled'}` });
       onUploadSuccess?.();
       onOpenChange(false);
     } catch (err: any) {
       console.warn('lookup-product error', err);
       toast({ title: 'Lookup Error', description: 'Failed to lookup or save product', variant: 'destructive' });
     }
-  }, [onUploadSuccess, onOpenChange, toast]);
+  }, [onUploadSuccess, onOpenChange, toast, mirrorCovers]);
 
   useEffect(() => {
     if (open && autoOpenScanner) {

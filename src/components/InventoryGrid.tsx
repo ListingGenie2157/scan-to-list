@@ -92,6 +92,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           )
         `)
         .eq('user_id', user?.id)
+        .in('status', ['draft','processed'])
         .order('created_at', { ascending: false });
 
       if (error) {
