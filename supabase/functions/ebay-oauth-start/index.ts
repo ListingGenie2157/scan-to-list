@@ -17,15 +17,24 @@ function b64url(input: string) {
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  console.log("Function called with method:", req.method);
+  
+  if (req.method === "OPTIONS") {
+    console.log("Handling OPTIONS request");
+    return new Response(null, { headers: corsHeaders });
+  }
 
   try {
-    console.log("Environment variables check:", {
+    console.log("Starting eBay OAuth flow");
+    
+    // Check environment variables first
+    const envCheck = {
       SUPABASE_URL: !!SUPABASE_URL,
       SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY,
       EBAY_CLIENT_ID: !!EBAY_CLIENT_ID,
       EBAY_REDIRECT_RUNAME: !!EBAY_REDIRECT_RUNAME,
-    });
+    };
+    console.log("Environment variables check:", envCheck);
 
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !EBAY_CLIENT_ID || !EBAY_REDIRECT_RUNAME) {
       const missing = [];
@@ -41,17 +50,31 @@ serve(async (req) => {
       });
     }
 
+    console.log("Creating Supabase client");
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+    console.log("Getting user from auth");
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError) {
+      console.error("User authentication error:", userError);
+      return new Response(JSON.stringify({ error: "Authentication failed", details: userError.message }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    if (!user) {
+      console.error("No user found");
+      return new Response(JSON.stringify({ error: "Unauthorized - no user" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log("User authenticated:", user.id);
 
     const scopes = [
       "https://api.ebay.com/oauth/api_scope",
@@ -59,6 +82,7 @@ serve(async (req) => {
     ].join(" ");
 
     const state = b64url(`${user.id}:${crypto.randomUUID()}`);
+    console.log("Generated state:", state);
 
     const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");
     authorizeUrl.searchParams.set("client_id", EBAY_CLIENT_ID);
@@ -67,12 +91,14 @@ serve(async (req) => {
     authorizeUrl.searchParams.set("scope", scopes);
     authorizeUrl.searchParams.set("state", state);
 
+    console.log("Generated authorization URL:", authorizeUrl.toString());
+
     return new Response(JSON.stringify({ authorizeUrl: authorizeUrl.toString() }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
     console.error("ebay-oauth-start error", e);
-    return new Response(JSON.stringify({ error: String(e) }), {
+    return new Response(JSON.stringify({ error: String(e), stack: e.stack }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
