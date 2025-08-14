@@ -20,8 +20,22 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    console.log("Environment variables check:", {
+      SUPABASE_URL: !!SUPABASE_URL,
+      SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY,
+      EBAY_CLIENT_ID: !!EBAY_CLIENT_ID,
+      EBAY_REDIRECT_RUNAME: !!EBAY_REDIRECT_RUNAME,
+    });
+
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !EBAY_CLIENT_ID || !EBAY_REDIRECT_RUNAME) {
-      return new Response(JSON.stringify({ error: "Server not configured" }), {
+      const missing = [];
+      if (!SUPABASE_URL) missing.push("SUPABASE_URL");
+      if (!SUPABASE_ANON_KEY) missing.push("SUPABASE_ANON_KEY");
+      if (!EBAY_CLIENT_ID) missing.push("EBAY_CLIENT_ID");
+      if (!EBAY_REDIRECT_RUNAME) missing.push("EBAY_REDIRECT_RUNAME");
+      
+      console.error("Missing environment variables:", missing);
+      return new Response(JSON.stringify({ error: "Server not configured", missing }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
