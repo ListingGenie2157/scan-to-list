@@ -7,6 +7,8 @@ export const ConnectEbayButton = () => {
   const [loading, setLoading] = useState(false);
 
   const handleConnect = async () => {
+    console.log("handleConnect called - button was clicked!");
+    
     try {
       console.log("Starting eBay connection process...");
       setLoading(true);
@@ -14,10 +16,10 @@ export const ConnectEbayButton = () => {
       console.log("Invoking ebay-oauth-start function...");
       const { data, error } = await supabase.functions.invoke("ebay-oauth-start");
 
-      console.log("Function response:", { data, error });
+      console.log("Function response received:", { data, error });
 
       if (error) {
-        console.error("Function error:", error);
+        console.error("Function error details:", error);
         throw error;
       }
 
@@ -33,16 +35,20 @@ export const ConnectEbayButton = () => {
       // Try to break out of iframe (eBay blocks being embedded via X-Frame-Options)
       try {
         if (window.top) {
+          console.log("Using window.top.location");
           (window.top as Window).location.href = url;
           return;
         }
-      } catch (_) {
+      } catch (e) {
+        console.log("window.top failed:", e);
         // Ignore cross-origin access errors; we'll fall back to opening a new tab
       }
 
       // Fallback: open in a new tab
+      console.log("Opening in new tab");
       const popup = window.open(url, "_blank", "noopener,noreferrer");
       if (!popup) {
+        console.log("Popup blocked, using current window");
         // Last resort: navigate current frame
         window.location.href = url;
       }
@@ -50,6 +56,7 @@ export const ConnectEbayButton = () => {
       console.error("Failed to start eBay OAuth:", err);
       alert("Couldn't start eBay connection. Please try again.");
     } finally {
+      console.log("Setting loading to false");
       setLoading(false);
     }
   };
