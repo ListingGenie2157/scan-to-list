@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Link as LinkIcon } from "lucide-react";
 
 export const ConnectEbayButton = () => {
+  console.log("ConnectEbayButton component is rendering");
   const [loading, setLoading] = useState(false);
 
   const handleConnect = async () => {
