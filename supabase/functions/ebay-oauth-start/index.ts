@@ -33,6 +33,8 @@ serve(async (req) => {
       SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY,
       EBAY_CLIENT_ID: !!EBAY_CLIENT_ID,
       EBAY_REDIRECT_RUNAME: !!EBAY_REDIRECT_RUNAME,
+      CLIENT_ID_PREFIX: EBAY_CLIENT_ID ? EBAY_CLIENT_ID.substring(0, 10) + "..." : "MISSING",
+      REDIRECT_URI: EBAY_REDIRECT_RUNAME || "MISSING"
     };
     console.log("Environment variables check:", envCheck);
 
