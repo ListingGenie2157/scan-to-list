@@ -9,8 +9,9 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!;
-const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME")!;
+// Use production credentials (both must match)
+const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!; // Production client ID
+const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME")!; // Production RuName
 
 function b64url(input: string) {
   return btoa(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
