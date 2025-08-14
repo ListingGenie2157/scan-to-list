@@ -81,7 +81,7 @@ serve(async (req) => {
       "https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
     ].join(" ");
 
-    const state = b64url(`${user.id}:${crypto.randomUUID()}`);
+    const state = b64url(`${user.id}:${Date.now()}`);
     console.log("Generated state:", state);
 
     const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");

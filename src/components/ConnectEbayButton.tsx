@@ -8,11 +8,28 @@ export const ConnectEbayButton = () => {
 
   const handleConnect = async () => {
     try {
+      console.log("Starting eBay connection process...");
       setLoading(true);
+      
+      console.log("Invoking ebay-oauth-start function...");
       const { data, error } = await supabase.functions.invoke("ebay-oauth-start");
-      if (error) throw error;
+      
+      console.log("Function response:", { data, error });
+      
+      if (error) {
+        console.error("Function error:", error);
+        throw error;
+      }
+      
       const url = (data as any)?.authorizeUrl as string | undefined;
-      if (!url) throw new Error("Authorization URL not returned");
+      console.log("Authorization URL received:", url);
+      
+      if (!url) {
+        console.error("No authorization URL in response:", data);
+        throw new Error("Authorization URL not returned");
+      }
+      
+      console.log("Redirecting to eBay...");
       window.location.href = url;
     } catch (err) {
       console.error("Failed to start eBay OAuth:", err);
