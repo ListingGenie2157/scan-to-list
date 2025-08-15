@@ -35,8 +35,10 @@ serve(async (req) => {
       SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY,
       EBAY_CLIENT_ID: !!EBAY_CLIENT_ID,
       EBAY_REDIRECT_RUNAME: !!EBAY_REDIRECT_RUNAME,
+      EBAY_SCOPES: !!EBAY_SCOPES,
       CLIENT_ID_PREFIX: EBAY_CLIENT_ID ? EBAY_CLIENT_ID.substring(0, 10) + "..." : "MISSING",
-      REDIRECT_URI: EBAY_REDIRECT_RUNAME || "MISSING"
+      REDIRECT_URI: EBAY_REDIRECT_RUNAME || "MISSING",
+      SCOPES_PREFIX: EBAY_SCOPES ? EBAY_SCOPES.substring(0, 50) + "..." : "MISSING"
     };
     console.log("Environment variables check:", envCheck);
 
@@ -87,6 +89,7 @@ serve(async (req) => {
     console.log("Generated state:", state);
     console.log("Using scopes:", scopes);
     console.log("Redirect URI:", EBAY_REDIRECT_RUNAME);
+    console.log("Full scopes value:", EBAY_SCOPES);
 
     const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");
     authorizeUrl.searchParams.set("client_id", EBAY_CLIENT_ID);
