@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,14 +8,29 @@ import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
 import { ConnectEbayButton } from "./ConnectEbayButton";
+import { useToast } from "@/hooks/use-toast";
 
 export const Dashboard = () => {
   const { user, signOut } = useAuth();
+  const { toast } = useToast();
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [autoOpenScanner, setAutoOpenScanner] = useState(false);
   const [showBundleSuggestions, setShowBundleSuggestions] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "inventory">("overview");
   const inventoryGridRef = useRef<{ refreshInventory: () => void }>(null);
+
+  // Check for eBay connection success
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('ebay') === 'connected') {
+      toast({
+        title: "eBay Connected Successfully!",
+        description: "Your eBay account is now connected and ready for listing.",
+      });
+      // Clean up the URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [toast]);
 
   const handleUploadSuccess = () => {
     // Switch to inventory tab and refresh the data
