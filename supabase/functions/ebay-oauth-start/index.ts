@@ -12,6 +12,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 // Use production credentials (both must match)
 const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!; // Production client ID
 const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME")!; // Production RuName
+const EBAY_SCOPES = Deno.env.get("EBAY_SCOPES")!; // Application-specific scopes
 
 function b64url(input: string) {
   return btoa(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -39,12 +40,13 @@ serve(async (req) => {
     };
     console.log("Environment variables check:", envCheck);
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !EBAY_CLIENT_ID || !EBAY_REDIRECT_RUNAME) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !EBAY_CLIENT_ID || !EBAY_REDIRECT_RUNAME || !EBAY_SCOPES) {
       const missing = [];
       if (!SUPABASE_URL) missing.push("SUPABASE_URL");
       if (!SUPABASE_ANON_KEY) missing.push("SUPABASE_ANON_KEY");
       if (!EBAY_CLIENT_ID) missing.push("EBAY_CLIENT_ID");
       if (!EBAY_REDIRECT_RUNAME) missing.push("EBAY_REDIRECT_RUNAME");
+      if (!EBAY_SCOPES) missing.push("EBAY_SCOPES");
       
       console.error("Missing environment variables:", missing);
       return new Response(JSON.stringify({ error: "Server not configured", missing }), {
@@ -79,7 +81,7 @@ serve(async (req) => {
 
     console.log("User authenticated:", user.id);
 
-    const scopes = "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/buy.browse.readonly";
+    const scopes = EBAY_SCOPES;
     const state = b64url(`${user.id}:${Date.now()}`);
     
     console.log("Generated state:", state);
