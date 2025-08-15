@@ -32,27 +32,62 @@ export const ConnectEbayButton = () => {
         throw new Error("Authorization URL not returned");
       }
 
-      console.log("Redirecting to eBay (top window to avoid iframe blocking)...");
-      // Try to break out of iframe (eBay blocks being embedded via X-Frame-Options)
-      try {
-        if (window.top) {
-          console.log("Using window.top.location");
-          (window.top as Window).location.href = url;
-          return;
-        }
-      } catch (e) {
-        console.log("window.top failed:", e);
-        // Ignore cross-origin access errors; we'll fall back to opening a new tab
+      console.log("Opening eBay authorization in popup...");
+      
+      // Open popup window for OAuth
+      const popup = window.open(
+        url, 
+        "ebay-oauth", 
+        "width=600,height=700,scrollbars=yes,resizable=yes"
+      );
+      
+      if (!popup) {
+        console.error("Popup was blocked");
+        alert("Please allow popups for this site to connect to eBay.");
+        return;
       }
 
-      // Fallback: open in a new tab
-      console.log("Opening in new tab");
-      const popup = window.open(url, "_blank", "noopener,noreferrer");
-      if (!popup) {
-        console.log("Popup blocked, using current window");
-        // Last resort: navigate current frame
-        window.location.href = url;
-      }
+      // Listen for the OAuth completion
+      const pollTimer = setInterval(() => {
+        try {
+          if (popup.closed) {
+            clearInterval(pollTimer);
+            console.log("Popup was closed");
+            // Check if we have a successful connection by checking URL params
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('ebay') === 'connected') {
+              alert("Successfully connected to eBay!");
+              // Refresh the page to update the UI
+              window.location.reload();
+            }
+            return;
+          }
+
+          // Check if popup navigated to our callback URL
+          try {
+            const popupUrl = popup.location.href;
+            if (popupUrl.includes('ebay=connected')) {
+              clearInterval(pollTimer);
+              popup.close();
+              alert("Successfully connected to eBay!");
+              // Refresh the page to update the UI
+              window.location.reload();
+            }
+          } catch (e) {
+            // Cross-origin error - popup is still on eBay domain, continue polling
+          }
+        } catch (err) {
+          console.error("Error checking popup status:", err);
+        }
+      }, 1000);
+
+      // Clean up after 5 minutes
+      setTimeout(() => {
+        clearInterval(pollTimer);
+        if (!popup.closed) {
+          popup.close();
+        }
+      }, 300000);
     } catch (err) {
       console.error("Failed to start eBay OAuth:", err);
       alert("Couldn't start eBay connection. Please try again.");
