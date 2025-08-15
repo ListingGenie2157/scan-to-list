@@ -73,13 +73,15 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { error } = await supabase.from("oauth_tokens").insert({
+    const { error } = await supabase.from("oauth_tokens").upsert({
       provider: "ebay",
       access_token,
       refresh_token: refresh_token ?? null,
       user_id: userId,
       scope: "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
       expires_at,
+    }, {
+      onConflict: 'user_id,provider'
     });
 
     if (error) {
