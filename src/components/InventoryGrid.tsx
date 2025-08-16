@@ -5,13 +5,14 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Filter, Package, Clock, CheckCircle, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2, Plus } from "lucide-react";
+import { Search, Filter, Package, Clock, CheckCircle, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2, Plus, DollarSign } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
 import { CreateListingModal } from "@/components/CreateListingModal";
 import { BulkListingModal } from "@/components/BulkListingModal";
 import { BulkEditModal } from "@/components/BulkEditModal";
+import { EbayPricingModal } from "@/components/EbayPricingModal";
 
 interface InventoryItem {
   id: string;
@@ -58,6 +59,8 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [isBulkListingModalOpen, setIsBulkListingModalOpen] = useState(false);
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
+  const [pricingItem, setPricingItem] = useState<InventoryItem | null>(null);
   const { toast } = useToast();
 
   useImperativeHandle(ref, () => ({
@@ -244,6 +247,11 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
     } catch (err) {
       console.error('Bulk delete failed', err);
     }
+  };
+
+  const handleGetPricing = (item: InventoryItem) => {
+    setPricingItem(item);
+    setIsPricingModalOpen(true);
   };
 
   const handleAddPhoto = async (itemId: string) => {
@@ -518,38 +526,53 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2 pt-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="flex-1"
-                onClick={(e) => { e.stopPropagation(); /* TODO: Implement edit */ }}
-              >
-                Edit
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="flex-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleAddPhoto(item.id);
-                }}
-              >
-                <Plus className="w-4 h-4 mr-1" /> Add Photo
-              </Button>
-              <Button 
-                variant="default" 
-                size="sm" 
-                className="flex-1"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedItem(item);
-                  setIsCreateListingModalOpen(true);
-                }}
-              >
-                Create Listing
-              </Button>
+            <div className="space-y-2 pt-2">
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={(e) => { e.stopPropagation(); /* TODO: Implement edit */ }}
+                >
+                  Edit
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddPhoto(item.id);
+                  }}
+                >
+                  <Plus className="w-4 h-4 mr-1" /> Add Photo
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGetPricing(item);
+                  }}
+                >
+                  <DollarSign className="w-4 h-4 mr-1" /> eBay Pricing
+                </Button>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedItem(item);
+                    setIsCreateListingModalOpen(true);
+                  }}
+                >
+                  Create Listing
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -765,6 +788,15 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           fetchInventory();
           setSelectedItems([]);
         }}
+      />
+
+      <EbayPricingModal
+        isOpen={isPricingModalOpen}
+        onClose={() => {
+          setIsPricingModalOpen(false);
+          setPricingItem(null);
+        }}
+        item={pricingItem}
       />
     </div>
   );
