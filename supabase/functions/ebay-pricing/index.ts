@@ -81,8 +81,8 @@ serve(async (req) => {
     const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
     url.searchParams.set("limit", "50"); // More results for better pricing data
     
-    // Filter for SOLD/COMPLETED items only
-    url.searchParams.set("filter", "buyingOptions:{FIXED_PRICE|AUCTION},deliveryCountry:US,itemLocationCountry:US,conditionIds:{1000|1500|2000|2500|3000|4000|5000|6000}");
+    // Filter for COMPLETED items (sold + unsold but ended)
+    url.searchParams.set("filter", "buyingOptions:{FIXED_PRICE|AUCTION},deliveryCountry:US,itemLocationCountry:US,conditionIds:{1000|1500|2000|2500|3000|4000|5000|6000},itemEndDate:[2024-01-01T00:00:00.000Z..2024-12-31T23:59:59.999Z]");
     
     if (isbn) {
       url.searchParams.set("filter", url.searchParams.get("filter") + `,gtin:${isbn}`);
@@ -90,9 +90,9 @@ serve(async (req) => {
       url.searchParams.set("q", query);
     }
     
-    // Add sold items filter - this requires a different API approach
-    // We'll use the browse API but focus on completed listings
-    url.searchParams.set("aspect_filter", "categoryId:267"); // Books category
+    // Add completed listings filter using itemEndDate for past listings
+    // Note: eBay Browse API limitations - for true sold data we'd need Finding API or Shopping API
+    // This approach gets recently ended listings which includes sold items
 
     const resp = await fetch(url.toString(), {
       headers: {
@@ -106,8 +106,13 @@ serve(async (req) => {
 
     const items = (data.itemSummaries || []) as any[];
     
-    // Extract pricing data with more details
-    const validItems = items.filter(item => item?.price?.value && parseFloat(item.price.value) > 0);
+    // Extract pricing data with more details - filter for actually sold items when available
+    const validItems = items.filter(item => {
+      const hasPrice = item?.price?.value && parseFloat(item.price.value) > 0;
+      // Additional filter for sold state if available in the response
+      const isSoldOrCompleted = !item.sellingState || item.sellingState === 'ENDED' || item.sellingState === 'COMPLETED';
+      return hasPrice && isSoldOrCompleted;
+    });
     const prices = validItems
       .map(item => parseFloat(item.price.value))
       .sort((a, b) => a - b);
