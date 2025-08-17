@@ -56,7 +56,7 @@ serve(async (req) => {
       const body = new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: token.refresh_token,
-        scope: "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
+        scope: "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
       });
       const resp = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
         method: "POST",
@@ -82,7 +82,9 @@ serve(async (req) => {
     url.searchParams.set("limit", "50"); // More results for better pricing data
     
     // Filter for COMPLETED items (sold + unsold but ended)
-    url.searchParams.set("filter", "buyingOptions:{FIXED_PRICE|AUCTION},deliveryCountry:US,itemLocationCountry:US,conditionIds:{1000|1500|2000|2500|3000|4000|5000|6000},itemEndDate:[2024-01-01T00:00:00.000Z..2024-12-31T23:59:59.999Z]");
+    const currentYear = new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    url.searchParams.set("filter", `buyingOptions:{FIXED_PRICE|AUCTION},deliveryCountry:US,itemLocationCountry:US,conditionIds:{1000|1500|2000|2500|3000|4000|5000|6000},itemEndDate:[${lastYear}-01-01T00:00:00.000Z..${currentYear}-12-31T23:59:59.999Z]`);
     
     if (isbn) {
       url.searchParams.set("filter", url.searchParams.get("filter") + `,gtin:${isbn}`);
