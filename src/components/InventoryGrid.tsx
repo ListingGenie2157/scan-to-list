@@ -527,11 +527,11 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
             {/* Actions */}
             <div className="space-y-2 pt-2">
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="flex-1"
+                  className="flex-1 min-w-0"
                   onClick={(e) => { e.stopPropagation(); /* TODO: Implement edit */ }}
                 >
                   Edit
@@ -539,13 +539,13 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="flex-1"
+                  className="flex-1 min-w-0 text-xs sm:text-sm"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleAddPhoto(item.id);
                   }}
                 >
-                  <Plus className="w-4 h-4 mr-1" /> Add Photo
+                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Add Photo
                 </Button>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
