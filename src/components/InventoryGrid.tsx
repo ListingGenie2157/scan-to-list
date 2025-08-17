@@ -552,7 +552,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="flex-1"
+                  className="w-full"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleGetPricing(item);
@@ -563,7 +563,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 <Button 
                   variant="default" 
                   size="sm" 
-                  className="flex-1"
+                  className="w-full"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedItem(item);
