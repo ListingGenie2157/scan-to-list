@@ -23,17 +23,35 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
+    console.log("eBay pricing function called");
+    
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
     });
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return json({ error: "Unauthorized" }, 401);
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log("User lookup result:", { user: user?.id, error: userError });
+    
+    if (!user) {
+      console.log("No user found - unauthorized");
+      return json({ error: "Unauthorized" }, 401);
+    }
 
-    const { isbn, query } = await req.json().catch(() => ({ isbn: undefined, query: undefined }));
-    if (!isbn && !query) return json({ error: "Provide isbn or query" }, 400);
+    const requestBody = await req.json().catch((e) => {
+      console.log("JSON parse error:", e);
+      return { isbn: undefined, query: undefined };
+    });
+    
+    const { isbn, query } = requestBody;
+    console.log("Request parameters:", { isbn, query });
+    
+    if (!isbn && !query) {
+      console.log("Missing required parameters");
+      return json({ error: "Provide isbn or query" }, 400);
+    }
 
     // Get latest ebay token
+    console.log("Looking up eBay tokens for user:", user.id);
     const { data: tokens, error: tErr } = await supabase
       .from("oauth_tokens")
       .select("id, access_token, refresh_token, expires_at")
@@ -42,16 +60,36 @@ serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(1);
 
-    if (tErr) return json({ error: tErr.message }, 500);
+    console.log("Token lookup result:", { tokens: tokens?.length, error: tErr });
+    if (tErr) {
+      console.log("Token lookup error:", tErr);
+      return json({ error: tErr.message }, 500);
+    }
+    
     const token = tokens?.[0];
-    if (!token) return json({ error: "Connect eBay first" }, 401);
+    if (!token) {
+      console.log("No eBay token found for user");
+      return json({ error: "Connect eBay first" }, 401);
+    }
+    
+    console.log("Found token, checking expiry...", { 
+      hasAccessToken: !!token.access_token, 
+      hasRefreshToken: !!token.refresh_token,
+      expiresAt: token.expires_at 
+    });
 
     const exp = token.expires_at ? new Date(token.expires_at).getTime() : 0;
     let accessToken = token.access_token as string;
 
     if (!accessToken || exp - Date.now() < 60_000) {
       // refresh
-      if (!token.refresh_token) return json({ error: "Token expired and no refresh token available" }, 401);
+      console.log("Token needs refresh");
+      if (!token.refresh_token) {
+        console.log("No refresh token available");
+        return json({ error: "Token expired and no refresh token available" }, 401);
+      }
+      
+      console.log("Refreshing eBay token...");
       const basic = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
       const body = new URLSearchParams({
         grant_type: "refresh_token",
@@ -67,17 +105,24 @@ serve(async (req) => {
         body: body.toString(),
       });
       const j = await resp.json();
-      if (!resp.ok) return json({ error: "Refresh failed", details: j }, 401);
+      console.log("Token refresh response:", { ok: resp.ok, status: resp.status });
+      
+      if (!resp.ok) {
+        console.log("Token refresh failed:", j);
+        return json({ error: "Refresh failed", details: j }, 401);
+      }
 
       accessToken = j.access_token;
       const newExpires = new Date(Date.now() + (j.expires_in - 60) * 1000).toISOString();
 
+      console.log("Updating token in database...");
       await supabase
         .from("oauth_tokens")
         .update({ access_token: accessToken, expires_at: newExpires, refresh_token: j.refresh_token ?? token.refresh_token })
         .eq("id", token.id);
     }
 
+    console.log("Building eBay API request...");
     const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
     url.searchParams.set("limit", "50"); // More results for better pricing data
     
@@ -92,10 +137,13 @@ serve(async (req) => {
       url.searchParams.set("q", query);
     }
     
+    console.log("Final eBay API URL:", url.toString());
+    
     // Add completed listings filter using itemEndDate for past listings
     // Note: eBay Browse API limitations - for true sold data we'd need Finding API or Shopping API
     // This approach gets recently ended listings which includes sold items
 
+    console.log("Making eBay API request...");
     const resp = await fetch(url.toString(), {
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -103,8 +151,13 @@ serve(async (req) => {
       },
     });
 
+    console.log("eBay API response:", { ok: resp.ok, status: resp.status });
     const data = await resp.json();
-    if (!resp.ok) return json({ error: "Browse error", details: data }, 500);
+    
+    if (!resp.ok) {
+      console.log("eBay API error:", data);
+      return json({ error: "Browse error", details: data }, 500);
+    }
 
     const items = (data.itemSummaries || []) as any[];
     
