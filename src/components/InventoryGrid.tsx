@@ -548,11 +548,11 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   <Plus className="w-4 h-4 mr-1" /> Add Photo
                 </Button>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="w-full"
+                  className="flex-1"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleGetPricing(item);
@@ -563,7 +563,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 <Button 
                   variant="default" 
                   size="sm" 
-                  className="w-full"
+                  className="flex-1"
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedItem(item);
