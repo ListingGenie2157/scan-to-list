@@ -104,8 +104,19 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
-    console.error("ebay-oauth-start error", e);
-    return new Response(JSON.stringify({ error: String(e), stack: e.stack }), {
+    console.error("ebay-oauth-start error details:", {
+      message: e.message,
+      stack: e.stack,
+      name: e.name,
+      cause: e.cause
+    });
+    
+    return new Response(JSON.stringify({ 
+      error: String(e), 
+      message: e.message,
+      stack: e.stack,
+      timestamp: new Date().toISOString()
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
