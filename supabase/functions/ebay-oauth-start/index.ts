@@ -91,8 +91,8 @@ serve(async (req) => {
 
     console.log("User authenticated:", user.id);
 
-    // Use both scopes for complete access
-    const scopes = "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/buy.browse.readonly";
+    // Use the correct eBay scope format - just inventory for now to test
+    const scopes = "https://api.ebay.com/oauth/api_scope/sell.inventory";
     const state = b64url(`${user.id}:${Date.now()}`);
     
     console.log("Generated state:", state);
