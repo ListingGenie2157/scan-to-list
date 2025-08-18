@@ -42,16 +42,24 @@ serve(async (req) => {
     };
     console.log("Environment variables check:", envCheck);
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !EBAY_CLIENT_ID || !EBAY_REDIRECT_RUNAME || !EBAY_SCOPES) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !EBAY_CLIENT_ID || !EBAY_REDIRECT_RUNAME) {
       const missing = [];
       if (!SUPABASE_URL) missing.push("SUPABASE_URL");
       if (!SUPABASE_ANON_KEY) missing.push("SUPABASE_ANON_KEY");
       if (!EBAY_CLIENT_ID) missing.push("EBAY_CLIENT_ID");
       if (!EBAY_REDIRECT_RUNAME) missing.push("EBAY_REDIRECT_RUNAME");
-      if (!EBAY_SCOPES) missing.push("EBAY_SCOPES");
       
       console.error("Missing environment variables:", missing);
-      return new Response(JSON.stringify({ error: "Server not configured", missing }), {
+      return new Response(JSON.stringify({ 
+        error: "Server not configured", 
+        missing,
+        availableVars: {
+          SUPABASE_URL: !!SUPABASE_URL,
+          SUPABASE_ANON_KEY: !!SUPABASE_ANON_KEY,
+          EBAY_CLIENT_ID: !!EBAY_CLIENT_ID,
+          EBAY_REDIRECT_RUNAME: !!EBAY_REDIRECT_RUNAME
+        }
+      }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
