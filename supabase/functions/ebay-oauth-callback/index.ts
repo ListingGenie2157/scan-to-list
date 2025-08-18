@@ -89,7 +89,10 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const redirectTo = url.searchParams.get("redirect_to") || "https://8df2d048-f9db-4afe-90c6-9827cababee3.lovableproject.com/?ebay=connected";
+    // Get the origin from the referer header or use a fallback
+    const referer = req.headers.get("referer");
+    const origin = referer ? new URL(referer).origin : "https://id-preview--8df2d048-f9db-4afe-90c6-9827cababee3.lovable.app";
+    const redirectTo = url.searchParams.get("redirect_to") || `${origin}/?ebay=connected`;
     return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectTo } });
   } catch (e) {
     console.error("ebay-oauth-callback error", e);
