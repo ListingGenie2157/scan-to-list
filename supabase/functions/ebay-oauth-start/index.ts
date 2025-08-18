@@ -99,10 +99,13 @@ serve(async (req) => {
     console.log("Using scopes:", scopes);
     console.log("Redirect URI:", EBAY_REDIRECT_RUNAME);
 
+    // Use the correct callback URL format for Supabase edge functions
+    const callbackUrl = `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-callback`;
+
     const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");
     authorizeUrl.searchParams.set("client_id", EBAY_CLIENT_ID);
     authorizeUrl.searchParams.set("response_type", "code");
-    authorizeUrl.searchParams.set("redirect_uri", EBAY_REDIRECT_RUNAME);
+    authorizeUrl.searchParams.set("redirect_uri", callbackUrl);
     authorizeUrl.searchParams.set("scope", scopes);
     authorizeUrl.searchParams.set("state", state);
 

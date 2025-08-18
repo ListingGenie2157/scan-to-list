@@ -47,7 +47,7 @@ serve(async (req) => {
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: EBAY_REDIRECT_RUNAME,
+      redirect_uri: `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-callback`,
     });
 
     const tokenResp = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
