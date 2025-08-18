@@ -83,13 +83,13 @@ serve(async (req) => {
 
     console.log("User authenticated:", user.id);
 
-    const scopes = EBAY_SCOPES;
+    // Use both scopes for complete access
+    const scopes = "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/buy.browse.readonly";
     const state = b64url(`${user.id}:${Date.now()}`);
     
     console.log("Generated state:", state);
     console.log("Using scopes:", scopes);
     console.log("Redirect URI:", EBAY_REDIRECT_RUNAME);
-    console.log("Full scopes value:", EBAY_SCOPES);
 
     const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");
     authorizeUrl.searchParams.set("client_id", EBAY_CLIENT_ID);
