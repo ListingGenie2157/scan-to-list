@@ -1,99 +1,90 @@
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Link as LinkIcon } from "lucide-react";
+import { toast } from "@/components/ui/use-toast";
+
+const START_FN = "ebay-oauth-start";            // match your deployed name
+const ENV = "production";                       // force prod
 
 export const ConnectEbayButton = () => {
-  console.log("ConnectEbayButton component is rendering");
   const [loading, setLoading] = useState(false);
+  const popupRef = useRef<Window | null>(null);
+  const pollRef = useRef<number | null>(null);
+  const timeoutRef = useRef<number | null>(null);
+
+  const cleanup = useCallback(() => {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
+    if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
+  }, []);
+
+  useEffect(() => () => cleanup(), [cleanup]);
 
   const handleConnect = async () => {
-    console.log("handleConnect called - button was clicked!");
-    
+    if (loading) return;
+
     try {
-      console.log("Starting eBay connection process...");
       setLoading(true);
 
-      console.log("Invoking ebay-oauth-start function...");
-      const { data, error } = await supabase.functions.invoke("ebay-oauth-start");
+      // Ensure signed in
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session) throw new Error("Sign in first.");
 
-      console.log("Function response received:", { data, error });
+      // Start OAuth (PROD + returnUrl)
+      const { data, error } = await supabase.functions.invoke<{ authorizeUrl: string }>(START_FN, {
+        body: { environment: ENV, returnUrl: `${window.location.origin}/settings?ebay=connected` },
+      });
+      if (error) throw new Error(error.message || "Failed to start eBay OAuth");
+      if (!data?.authorizeUrl) throw new Error("No authorization URL received");
 
-      if (error) {
-        console.error("Function error details:", error);
-        throw error;
-      }
-
-      const url = (data as any)?.authorizeUrl as string | undefined;
-      console.log("Authorization URL received:", url);
-
-      if (!url) {
-        console.error("No authorization URL in response:", data);
-        throw new Error("Authorization URL not returned");
-      }
-
-      console.log("Opening eBay authorization in popup...");
-      
-      // Open popup window for OAuth
-      const popup = window.open(
-        url, 
-        "ebay-oauth", 
+      // Open popup
+      popupRef.current = window.open(
+        data.authorizeUrl,
+        "ebay-oauth",
         "width=600,height=700,scrollbars=yes,resizable=yes"
       );
-      
-      if (!popup) {
-        console.error("Popup was blocked");
-        alert("Please allow popups for this site to connect to eBay.");
-        return;
-      }
+      if (!popupRef.current) throw new Error("Popup blocked. Allow popups for this site.");
 
-      // Listen for the OAuth completion
-      const pollTimer = setInterval(() => {
+      // Poll refresh-token (authoritative success)
+      pollRef.current = window.setInterval(async () => {
         try {
-          if (popup.closed) {
-            clearInterval(pollTimer);
-            console.log("Popup was closed");
-            // Check if we have a successful connection by checking URL params
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('ebay') === 'connected') {
-              alert("Successfully connected to eBay!");
-              // Refresh the page to update the UI
-              window.location.reload();
-            }
+          // If user closed popup → treat as cancel
+          if (popupRef.current?.closed) {
+            cleanup();
+            setLoading(false);
+            toast({ title: "Cancelled", description: "Popup closed before connecting." });
             return;
           }
 
-          // Check if popup navigated to our callback URL
-          try {
-            const popupUrl = popup.location.href;
-            if (popupUrl.includes('ebay=connected')) {
-              clearInterval(pollTimer);
-              popup.close();
-              alert("Successfully connected to eBay!");
-              // Refresh the page to update the UI
-              window.location.reload();
-            }
-          } catch (e) {
-            // Cross-origin error - popup is still on eBay domain, continue polling
-          }
-        } catch (err) {
-          console.error("Error checking popup status:", err);
-        }
-      }, 1000);
+          const { data: tokenData } = await supabase.functions.invoke<{ access_token?: string }>(
+            "ebay-refresh-token",
+            { body: { environment: ENV } }
+          );
 
-      // Clean up after 5 minutes
-      setTimeout(() => {
-        clearInterval(pollTimer);
-        if (!popup.closed) {
-          popup.close();
+          if (tokenData?.access_token) {
+            cleanup();
+            setLoading(false);
+            toast({ title: "Success", description: "eBay (Production) connected." });
+            // optional: refresh UI
+            setTimeout(() => window.location.reload(), 800);
+          }
+        } catch {
+          // ignore until success; real errors will surface on button retry
         }
-      }, 300000);
-    } catch (err) {
-      console.error("Failed to start eBay OAuth:", err);
-      alert("Couldn't start eBay connection. Please try again.");
-    } finally {
-      console.log("Setting loading to false");
+      }, 2000);
+
+      // Hard timeout (5 min)
+      timeoutRef.current = window.setTimeout(() => {
+        cleanup();
+        setLoading(false);
+        toast({ title: "Timeout", description: "Connection timed out. Try again.", variant: "destructive" });
+      }, 5 * 60 * 1000);
+
+    } catch (e: any) {
+      cleanup();
       setLoading(false);
+      toast({ title: "Error", description: e?.message || "Failed to connect to eBay", variant: "destructive" });
     }
   };
 
@@ -105,11 +96,7 @@ export const ConnectEbayButton = () => {
       onClick={handleConnect}
       disabled={loading}
     >
-      {loading ? (
-        <Loader2 className="w-6 h-6 mb-2 animate-spin" />
-      ) : (
-        <LinkIcon className="w-6 h-6 mb-2" />
-      )}
+      {loading ? <Loader2 className="w-6 h-6 mb-2 animate-spin" /> : <LinkIcon className="w-6 h-6 mb-2" />}
       {loading ? "Connecting…" : "Connect eBay"}
     </Button>
   );
