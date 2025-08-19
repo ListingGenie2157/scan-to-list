@@ -72,7 +72,30 @@ export function EbayPricingModal({ isOpen, onClose, item }: EbayPricingModalProp
         body: payload
       });
 
-      if (error) throw error;
+      if (error) {
+        const status = (error as any)?.status;
+        const context = (error as any)?.context as any;
+        const code = context?.code;
+        let message = context?.error || error.message || 'Failed to get eBay pricing data';
+
+        if (code === 'EBAY_NOT_CONNECTED') {
+          message = 'Connect your eBay account to fetch pricing data.';
+        } else if (code === 'EBAY_REFRESH_FAILED') {
+          message = 'Your eBay session expired. Please reconnect eBay.';
+        } else if (code === 'EBAY_UNAUTHORIZED' || code === 'EBAY_FORBIDDEN') {
+          message = 'eBay authorization failed. Please reconnect eBay.';
+        } else if (status === 401 && message.includes('Unauthorized')) {
+          message = 'You must sign in to fetch pricing data.';
+        }
+
+        setError(message);
+        toast({
+          title: 'Pricing Error',
+          description: message,
+          variant: 'destructive'
+        });
+        return;
+      }
       
       if (data.analytics?.count === 0) {
         setError("No sold listings found for this item");

@@ -69,7 +69,7 @@ serve(async (req) => {
     const token = tokens?.[0];
     if (!token) {
       console.log("No eBay token found for user");
-      return json({ error: "Connect eBay first" }, 401);
+      return json({ error: "Connect eBay first", code: "EBAY_NOT_CONNECTED" }, 401);
     }
     
     console.log("Found token, checking expiry...", { 
@@ -109,7 +109,8 @@ serve(async (req) => {
       
       if (!resp.ok) {
         console.log("Token refresh failed:", j);
-        return json({ error: "Refresh failed", details: j }, 401);
+        const status = resp.status === 400 || resp.status === 401 ? 401 : 500;
+        return json({ error: "Refresh failed", code: "EBAY_REFRESH_FAILED", details: j }, status);
       }
 
       accessToken = j.access_token;
@@ -156,7 +157,9 @@ serve(async (req) => {
     
     if (!resp.ok) {
       console.log("eBay API error:", data);
-      return json({ error: "Browse error", details: data }, 500);
+      const code = resp.status === 401 ? "EBAY_UNAUTHORIZED" : resp.status === 403 ? "EBAY_FORBIDDEN" : "EBAY_BROWSE_ERROR";
+      const status = resp.status === 401 || resp.status === 403 ? resp.status : 502;
+      return json({ error: "Browse error", code, details: data }, status);
     }
 
     const items = (data.itemSummaries || []) as any[];
@@ -207,6 +210,7 @@ serve(async (req) => {
     });
   } catch (e) {
     console.error("ebay-pricing error", e);
-    return json({ error: String(e) }, 500);
+    const message = e instanceof Error ? e.message : String(e);
+    return json({ error: message, code: "EBAY_PRICING_EXCEPTION" }, 500);
   }
 });
