@@ -15,6 +15,11 @@ export const ConnectEbayButton = () => {
 
     try {
       setLoading(true);
+      // Safety: auto-cancel after 60s if start doesn't return
+      const cancelTimer = window.setTimeout(() => {
+        setLoading(false);
+        toast({ title: "Timeout", description: "No response from server. Try again.", variant: "destructive" });
+      }, 60_000);
 
       // Ensure signed in
       const { data: sess } = await supabase.auth.getSession();
@@ -24,6 +29,7 @@ export const ConnectEbayButton = () => {
       const { data, error } = await supabase.functions.invoke<{ authorizeUrl: string }>(START_FN, {
         body: { environment: ENV, returnUrl: `${window.location.origin}/?ebay=connected` },
       });
+      window.clearTimeout(cancelTimer);
       if (error) throw new Error(error.message || "Failed to start eBay OAuth");
       if (!data?.authorizeUrl) throw new Error("No authorization URL received");
 
