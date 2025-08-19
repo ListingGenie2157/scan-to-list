@@ -31,7 +31,11 @@ export const ConnectEbayButton = () => {
       window.location.assign(data.authorizeUrl);
     } catch (e: any) {
       setLoading(false);
-      toast({ title: "Error", description: e?.message || "Failed to connect to eBay", variant: "destructive" });
+      const body = e?.context?.body;
+      const details = typeof body === "string" ? body : body ? JSON.stringify(body) : null;
+      const description = details || e?.message || (typeof e === "string" ? e : "Failed to connect to eBay");
+      toast({ title: "Connect failed", description, variant: "destructive" });
+      console.error("eBay connect error:", e);
     }
   };
 

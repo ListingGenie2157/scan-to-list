@@ -11,7 +11,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!;
 const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET")!;
-const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME")!;
+const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME") ?? "";
 
 function b64urlToStr(input: string) {
   input = input.replace(/-/g, "+").replace(/_/g, "/");
@@ -37,17 +37,29 @@ serve(async (req) => {
     }
 
     const stateDecoded = b64urlToStr(state);
-    const userId = stateDecoded.split(":")[0];
+    let userId = "";
+    let returnTo: string | null = null;
+    try {
+      const parsed = JSON.parse(stateDecoded);
+      userId = parsed.u || "";
+      returnTo = parsed.r || null;
+    } catch {
+      // Backward compatibility with old state format
+      userId = stateDecoded.split(":")[0];
+    }
     if (!userId) {
       return new Response("Invalid state", { status: 400, headers: corsHeaders });
     }
 
     const basic = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
 
+    // The redirect_uri used here MUST match what was sent in the authorize step.
+    const directCallbackUrl = `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-callback`;
+    const redirectForToken = EBAY_REDIRECT_RUNAME || directCallbackUrl;
     const body = new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-callback`,
+      redirect_uri: redirectForToken,
     });
 
     const tokenResp = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
@@ -92,7 +104,7 @@ serve(async (req) => {
     // Get the origin from the referer header or use a fallback
     const referer = req.headers.get("referer");
     const origin = referer ? new URL(referer).origin : "https://id-preview--8df2d048-f9db-4afe-90c6-9827cababee3.lovable.app";
-    const redirectTo = url.searchParams.get("redirect_to") || `${origin}/?ebay=connected`;
+    const redirectTo = returnTo || url.searchParams.get("redirect_to") || `${origin}/?ebay=connected`;
     return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectTo } });
   } catch (e) {
     console.error("ebay-oauth-callback error", e);

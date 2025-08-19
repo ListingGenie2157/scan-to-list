@@ -11,8 +11,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 // Use production credentials (both must match)
 const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!; // Production client ID
-const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME")!; // Production RuName
-const EBAY_SCOPES = Deno.env.get("EBAY_SCOPES")!; // Application-specific scopes
+const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME") ?? ""; // Production RuName (optional if using direct URL)
+const EBAY_SCOPES = Deno.env.get("EBAY_SCOPES") ?? "https://api.ebay.com/oauth/api_scope/sell.inventory"; // Default minimal scope
 
 function b64url(input: string) {
   return btoa(input).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -37,17 +37,16 @@ serve(async (req) => {
       EBAY_REDIRECT_RUNAME: !!EBAY_REDIRECT_RUNAME,
       EBAY_SCOPES: !!EBAY_SCOPES,
       CLIENT_ID_PREFIX: EBAY_CLIENT_ID ? EBAY_CLIENT_ID.substring(0, 10) + "..." : "MISSING",
-      REDIRECT_URI: EBAY_REDIRECT_RUNAME || "MISSING",
+      REDIRECT_URI: EBAY_REDIRECT_RUNAME || "USING_DIRECT_URL",
       SCOPES_PREFIX: EBAY_SCOPES ? EBAY_SCOPES.substring(0, 50) + "..." : "MISSING"
     };
     console.log("Environment variables check:", envCheck);
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !EBAY_CLIENT_ID || !EBAY_REDIRECT_RUNAME) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !EBAY_CLIENT_ID) {
       const missing = [];
       if (!SUPABASE_URL) missing.push("SUPABASE_URL");
       if (!SUPABASE_ANON_KEY) missing.push("SUPABASE_ANON_KEY");
       if (!EBAY_CLIENT_ID) missing.push("EBAY_CLIENT_ID");
-      if (!EBAY_REDIRECT_RUNAME) missing.push("EBAY_REDIRECT_RUNAME");
       
       console.error("Missing environment variables:", missing);
       return new Response(JSON.stringify({ 
@@ -91,21 +90,33 @@ serve(async (req) => {
 
     console.log("User authenticated:", user.id);
 
-    // Use the correct eBay scope format - just inventory for now to test
-    const scopes = "https://api.ebay.com/oauth/api_scope/sell.inventory";
-    const state = b64url(`${user.id}:${Date.now()}`);
+    // Parse body for optional returnUrl
+    let returnUrl = "";
+    try {
+      const body = await req.json();
+      returnUrl = typeof body?.returnUrl === "string" && body.returnUrl ? body.returnUrl : "";
+    } catch (_) {
+      // ignore body parse errors
+    }
+
+    // Use provided scopes or default
+    const scopes = EBAY_SCOPES;
+    // Encode state with user and optional return URL
+    const statePayload = JSON.stringify({ u: user.id, r: returnUrl || null, t: Date.now() });
+    const state = b64url(statePayload);
     
     console.log("Generated state:", state);
     console.log("Using scopes:", scopes);
-    console.log("Redirect URI:", EBAY_REDIRECT_RUNAME);
+    console.log("Redirect setting:", EBAY_REDIRECT_RUNAME || "DIRECT_SUPABASE_CALLBACK");
 
-    // Use the correct callback URL format for Supabase edge functions
-    const callbackUrl = `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-callback`;
+    // If RUName is configured, use it. Otherwise fall back to direct Supabase callback URL
+    const directCallbackUrl = `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-callback`;
+    const redirectParam = EBAY_REDIRECT_RUNAME || directCallbackUrl;
 
     const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");
     authorizeUrl.searchParams.set("client_id", EBAY_CLIENT_ID);
     authorizeUrl.searchParams.set("response_type", "code");
-    authorizeUrl.searchParams.set("redirect_uri", callbackUrl);
+    authorizeUrl.searchParams.set("redirect_uri", redirectParam);
     authorizeUrl.searchParams.set("scope", scopes);
     authorizeUrl.searchParams.set("state", state);
 
