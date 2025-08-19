@@ -36,8 +36,17 @@ serve(async (req) => {
       return new Response("Missing code or state", { status: 400, headers: corsHeaders });
     }
 
+    // Support both legacy colon-delimited and JSON state
     const stateDecoded = b64urlToStr(state);
-    const userId = stateDecoded.split(":")[0];
+    let userId = "";
+    let returnUrl: string | null = null;
+    try {
+      const parsed = JSON.parse(stateDecoded);
+      userId = parsed.userId || "";
+      returnUrl = parsed.returnUrl || null;
+    } catch {
+      userId = stateDecoded.split(":")[0];
+    }
     if (!userId) {
       return new Response("Invalid state", { status: 400, headers: corsHeaders });
     }
@@ -69,6 +78,7 @@ serve(async (req) => {
     const access_token: string = tokenJson.access_token;
     const refresh_token: string | undefined = tokenJson.refresh_token;
     const expires_in: number = tokenJson.expires_in;
+    const returned_scope: string = Array.isArray(tokenJson.scope) ? tokenJson.scope.join(" ") : (tokenJson.scope || "");
 
     const expires_at = new Date(Date.now() + (expires_in - 60) * 1000).toISOString();
 
@@ -79,7 +89,7 @@ serve(async (req) => {
       access_token,
       refresh_token: refresh_token ?? null,
       user_id: userId,
-      scope: "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
+      scope: returned_scope,
       expires_at,
     }, {
       onConflict: 'user_id,provider'
@@ -90,10 +100,11 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // Get the origin from the referer header or use a fallback
+    // Redirect back to app
     const referer = req.headers.get("referer");
-    const origin = referer ? new URL(referer).origin : "https://id-preview--8df2d048-f9db-4afe-90c6-9827cababee3.lovable.app";
-    const redirectTo = url.searchParams.get("redirect_to") || `${origin}/?ebay=connected`;
+    const origin = referer ? new URL(referer).origin : undefined;
+    const fallback = origin ? `${origin}/?ebay=connected` : `/?ebay=connected`;
+    const redirectTo = url.searchParams.get("redirect_to") || returnUrl || fallback;
     return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectTo } });
   } catch (e) {
     console.error("ebay-oauth-callback error", e);

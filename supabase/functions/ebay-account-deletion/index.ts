@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // This function handles eBay Marketplace Account Deletion notifications
 // - GET: responds to the initial challenge with a SHA-256 hash of (challengeCode + verificationToken + endpoint)
@@ -71,6 +72,21 @@ serve(async (req) => {
         signature,
         body: bodyText,
       });
+
+      // Best-effort cleanup: if body includes a user identifier, delete their eBay oauth tokens
+      try {
+        const json = JSON.parse(bodyText || "{}");
+        const impactedUserId: string | undefined = json?.metadata?.userId || json?.userId || undefined;
+        if (impactedUserId) {
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          const supabase = createClient(supabaseUrl, serviceKey);
+          await supabase.from("oauth_tokens").delete().eq("user_id", impactedUserId).eq("provider", "ebay");
+          console.log("Removed ebay oauth_tokens for user", impactedUserId);
+        }
+      } catch (_e) {
+        // ignore if payload format is unexpected
+      }
 
       // Acknowledge receipt immediately
       return new Response(null, { status: 200, headers: corsHeaders });

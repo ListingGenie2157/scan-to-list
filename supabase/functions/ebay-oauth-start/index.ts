@@ -28,6 +28,12 @@ serve(async (req) => {
 
   try {
     console.log("Starting eBay OAuth flow");
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {}
+    const requestedReturnUrl: string | undefined = body?.returnUrl;
+    const requestedEnv: string | undefined = body?.environment;
     
     // Check environment variables first
     const envCheck = {
@@ -91,15 +97,17 @@ serve(async (req) => {
 
     console.log("User authenticated:", user.id);
 
-    // Use the correct eBay scope format - just inventory for now to test
-    const scopes = "https://api.ebay.com/oauth/api_scope/sell.inventory";
-    const state = b64url(`${user.id}:${Date.now()}`);
+    // Choose scopes: prefer env var, else minimum for selling inventory
+    const scopes = EBAY_SCOPES || "https://api.ebay.com/oauth/api_scope/sell.inventory";
+    // Include returnUrl in state for callback redirect (backward compatible format is JSON)
+    const statePayload = { userId: user.id, ts: Date.now(), returnUrl: requestedReturnUrl || null, env: requestedEnv || "production" };
+    const state = b64url(JSON.stringify(statePayload));
     
     console.log("Generated state:", state);
     console.log("Using scopes:", scopes);
     console.log("Redirect URI:", EBAY_REDIRECT_RUNAME);
 
-    // eBay expects the RuName (redirect uri) registered in the developer app, not the edge function URL
+    // eBay expects the RuName (redirect uri) registered in the developer app
     const callbackUrl = EBAY_REDIRECT_RUNAME;
 
     const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");
