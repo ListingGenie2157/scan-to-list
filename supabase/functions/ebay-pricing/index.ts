@@ -9,9 +9,9 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!; // for refresh
-const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET")!; // for refresh
+// We no longer require service role or OAuth for pricing via Finding API
+const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID") || ""; // May equal App ID
+const EBAY_APP_ID = Deno.env.get("EBAY_APP_ID") || EBAY_CLIENT_ID; // Use explicit APP ID if provided
 
 function json(body: any, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -26,11 +26,10 @@ serve(async (req) => {
   try {
     console.log("eBay pricing function called");
     
-    // Use anon client for auth (reads the user's JWT); use service role for DB (bypass RLS to read tokens)
+    // Use anon client for auth (reads the user's JWT)
     const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
     });
-    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
     console.log("User lookup result:", { user: user?.id, error: userError });
@@ -53,96 +52,32 @@ serve(async (req) => {
       return json({ error: "Provide isbn or query" }, 400);
     }
 
-    // Get latest ebay token
-    console.log("Looking up eBay tokens for user:", user.id);
-    const { data: tokens, error: tErr } = await supabaseAdmin
-      .from("oauth_tokens")
-      .select("id, access_token, refresh_token, expires_at")
-      .eq("provider", "ebay")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1);
+    // Build eBay Finding API request (does not require OAuth browse scope)
+    console.log("Building eBay Finding API request...");
+    if (!EBAY_APP_ID) {
+      return json({ error: "Missing EBAY_APP_ID or EBAY_CLIENT_ID environment variable" }, 500);
+    }
 
-    console.log("Token lookup result:", { tokens: tokens?.length, error: tErr });
-    if (tErr) {
-      console.log("Token lookup error:", tErr);
-      return json({ error: tErr.message }, 500);
-    }
-    
-    const token = tokens?.[0];
-    if (!token) {
-      console.log("No eBay token found for user");
-      return json({ error: "Connect eBay first" }, 401);
-    }
-    
-    console.log("Found token, checking expiry...", { 
-      hasAccessToken: !!token.access_token, 
-      hasRefreshToken: !!token.refresh_token,
-      expiresAt: token.expires_at 
+    const findingParams = new URLSearchParams({
+      "OPERATION-NAME": "findCompletedItems",
+      "SERVICE-VERSION": "1.13.0",
+      "SECURITY-APPNAME": EBAY_APP_ID,
+      "RESPONSE-DATA-FORMAT": "JSON",
+      "REST-PAYLOAD": "true",
+      "paginationInput.entriesPerPage": "50",
+      // Books category to reduce noise
+      "categoryId": "267",
     });
 
-    const exp = token.expires_at ? new Date(token.expires_at).getTime() : 0;
-    let accessToken = token.access_token as string;
-
-    if (!accessToken || exp - Date.now() < 60_000) {
-      // refresh
-      console.log("Token needs refresh");
-      if (!token.refresh_token) {
-        console.log("No refresh token available");
-        return json({ error: "Token expired and no refresh token available" }, 401);
-      }
-      
-      console.log("Refreshing eBay token...");
-      const basic = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
-      const body = new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: token.refresh_token,
-        // Only request the minimal scope required for pricing
-        scope: "https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
-      });
-      const resp = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
-        method: "POST",
-        headers: {
-          "Authorization": `Basic ${basic}`,
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: body.toString(),
-      });
-      const j = await resp.json();
-      console.log("Token refresh response:", { ok: resp.ok, status: resp.status });
-      
-      if (!resp.ok) {
-        console.log("Token refresh failed:", j);
-        return json({ error: "Refresh failed", details: j }, 401);
-      }
-
-      accessToken = j.access_token;
-      const newExpires = new Date(Date.now() + (j.expires_in - 60) * 1000).toISOString();
-
-      console.log("Updating token in database...");
-      await supabaseAdmin
-        .from("oauth_tokens")
-        .update({ access_token: accessToken, expires_at: newExpires, refresh_token: j.refresh_token ?? token.refresh_token })
-        .eq("id", token.id);
-    }
-
-    console.log("Building eBay API request...");
-    const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
-    url.searchParams.set("limit", "50"); // More results for better pricing data
-
-    // Use only supported filters for Browse API
-    const baseFilters = [
-      "buyingOptions:{FIXED_PRICE|AUCTION}",
-      "deliveryCountry:US",
-      "itemLocationCountry:US"
-    ];
+    // Use ISBN as keyword if present; otherwise use provided query
     if (isbn) {
-      baseFilters.push(`gtin:${isbn}`);
+      findingParams.set("keywords", String(isbn));
+    } else if (query) {
+      findingParams.set("keywords", String(query));
     }
-    url.searchParams.set("filter", baseFilters.join(","));
-    if (!isbn && query) {
-      url.searchParams.set("q", query);
-    }
+
+    const url = new URL("https://svcs.ebay.com/services/search/FindingService/v1");
+    url.search = findingParams.toString();
     
     console.log("Final eBay API URL:", url.toString());
     
@@ -150,13 +85,8 @@ serve(async (req) => {
     // Note: eBay Browse API limitations - for true sold data we'd need Finding API or Shopping API
     // This approach gets recently ended listings which includes sold items
 
-    console.log("Making eBay API request...");
-    const resp = await fetch(url.toString(), {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-      },
-    });
+    console.log("Making eBay Finding API request...");
+    const resp = await fetch(url.toString());
 
     console.log("eBay API response:", { ok: resp.ok, status: resp.status });
     const data = await resp.json();
@@ -166,17 +96,20 @@ serve(async (req) => {
       return json({ error: "Browse error", details: data }, 500);
     }
 
-    const items = (data.itemSummaries || []) as any[];
+    // Parse Finding API response
+    const itemsRaw = data?.findCompletedItemsResponse?.[0]?.searchResult?.[0]?.item || [];
+    const items = itemsRaw as any[];
     
     // Extract pricing data with more details - filter for actually sold items when available
     const validItems = items.filter(item => {
-      const hasPrice = item?.price?.value && parseFloat(item.price.value) > 0;
-      // Additional filter for sold state if available in the response
-      const isSoldOrCompleted = !item.sellingState || item.sellingState === 'ENDED' || item.sellingState === 'COMPLETED';
-      return hasPrice && isSoldOrCompleted;
+      const sellingState = item?.sellingStatus?.[0]?.sellingState?.[0];
+      const priceValue = item?.sellingStatus?.[0]?.currentPrice?.[0]?.__value__;
+      const hasPrice = priceValue && parseFloat(priceValue) > 0;
+      const isSold = sellingState === 'EndedWithSales';
+      return hasPrice && isSold;
     });
     const prices = validItems
-      .map(item => parseFloat(item.price.value))
+      .map(item => parseFloat(item.sellingStatus[0].currentPrice[0].__value__))
       .sort((a, b) => a - b);
     
     // Calculate comprehensive pricing analytics
@@ -194,16 +127,16 @@ serve(async (req) => {
     
     // Enhanced item data for UI
     const processedItems = validItems.map(item => ({
-      title: item.title,
-      price: parseFloat(item.price.value),
-      currency: item.price.currency,
-      condition: item.condition,
-      sellingState: item.sellingState,
-      listingMarketplaceId: item.listingMarketplaceId,
-      itemWebUrl: item.itemWebUrl,
-      image: item.image?.imageUrl,
-      seller: item.seller?.username,
-      categories: item.categories?.map((c: any) => c.categoryName),
+      title: item.title?.[0],
+      price: parseFloat(item.sellingStatus?.[0]?.currentPrice?.[0]?.__value__),
+      currency: item.sellingStatus?.[0]?.currentPrice?.[0]?.['@currencyId'] || 'USD',
+      condition: item.condition?.[0]?.conditionDisplayName?.[0] || null,
+      sellingState: item.sellingStatus?.[0]?.sellingState?.[0] || null,
+      listingMarketplaceId: 'EBAY_US',
+      itemWebUrl: item.viewItemURL?.[0] || null,
+      image: item.galleryURL?.[0] || null,
+      seller: item.sellerInfo?.[0]?.sellerUserName?.[0] || null,
+      categories: item.primaryCategory ? [item.primaryCategory?.[0]?.categoryName?.[0]].filter(Boolean) : [],
     }));
 
     return json({ 

@@ -13,15 +13,24 @@ serve(async (req) => {
   }
 
   try {
-    const { selectedItemIds, userId } = await req.json();
-    
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
+    const { selectedItemIds } = await req.json();
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // Authenticate the caller and derive userId from the JWT to prevent impersonation
+    const supabaseAuth = createClient(supabaseUrl, anonKey, {
+      global: { headers: { Authorization: req.headers.get('Authorization') || '' } },
+    });
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
+    if (userError || !user) {
+      throw new Error('Unauthorized');
+    }
+    const userId = user.id;
+
+    // Use service role for privileged reads/writes after we know the real user id
+    const supabase = createClient(supabaseUrl, serviceKey);
 
     // Build query for inventory items with photo URLs
     let query = supabase

@@ -99,8 +99,8 @@ serve(async (req) => {
     console.log("Using scopes:", scopes);
     console.log("Redirect URI:", EBAY_REDIRECT_RUNAME);
 
-    // Use the correct callback URL format for Supabase edge functions
-    const callbackUrl = `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-callback`;
+    // eBay expects the RuName (redirect uri) registered in the developer app, not the edge function URL
+    const callbackUrl = EBAY_REDIRECT_RUNAME;
 
     const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");
     authorizeUrl.searchParams.set("client_id", EBAY_CLIENT_ID);
