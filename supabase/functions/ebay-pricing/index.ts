@@ -9,6 +9,7 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!; // for refresh
 const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET")!; // for refresh
 
@@ -25,11 +26,13 @@ serve(async (req) => {
   try {
     console.log("eBay pricing function called");
     
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    // Use anon client for auth (reads the user's JWT); use service role for DB (bypass RLS to read tokens)
+    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
     });
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
     console.log("User lookup result:", { user: user?.id, error: userError });
     
     if (!user) {
@@ -52,7 +55,7 @@ serve(async (req) => {
 
     // Get latest ebay token
     console.log("Looking up eBay tokens for user:", user.id);
-    const { data: tokens, error: tErr } = await supabase
+    const { data: tokens, error: tErr } = await supabaseAdmin
       .from("oauth_tokens")
       .select("id, access_token, refresh_token, expires_at")
       .eq("provider", "ebay")
@@ -94,7 +97,8 @@ serve(async (req) => {
       const body = new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: token.refresh_token,
-        scope: "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
+        // Only request the minimal scope required for pricing
+        scope: "https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
       });
       const resp = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
         method: "POST",
@@ -116,7 +120,7 @@ serve(async (req) => {
       const newExpires = new Date(Date.now() + (j.expires_in - 60) * 1000).toISOString();
 
       console.log("Updating token in database...");
-      await supabase
+      await supabaseAdmin
         .from("oauth_tokens")
         .update({ access_token: accessToken, expires_at: newExpires, refresh_token: j.refresh_token ?? token.refresh_token })
         .eq("id", token.id);
@@ -125,15 +129,18 @@ serve(async (req) => {
     console.log("Building eBay API request...");
     const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
     url.searchParams.set("limit", "50"); // More results for better pricing data
-    
-    // Filter for COMPLETED items (sold + unsold but ended)
-    const currentYear = new Date().getFullYear();
-    const lastYear = currentYear - 1;
-    url.searchParams.set("filter", `buyingOptions:{FIXED_PRICE|AUCTION},deliveryCountry:US,itemLocationCountry:US,conditionIds:{1000|1500|2000|2500|3000|4000|5000|6000},itemEndDate:[${lastYear}-01-01T00:00:00.000Z..${currentYear}-12-31T23:59:59.999Z]`);
-    
+
+    // Use only supported filters for Browse API
+    const baseFilters = [
+      "buyingOptions:{FIXED_PRICE|AUCTION}",
+      "deliveryCountry:US",
+      "itemLocationCountry:US"
+    ];
     if (isbn) {
-      url.searchParams.set("filter", url.searchParams.get("filter") + `,gtin:${isbn}`);
-    } else if (query) {
+      baseFilters.push(`gtin:${isbn}`);
+    }
+    url.searchParams.set("filter", baseFilters.join(","));
+    if (!isbn && query) {
       url.searchParams.set("q", query);
     }
     
