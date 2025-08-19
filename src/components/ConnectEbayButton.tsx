@@ -15,13 +15,23 @@ export function ConnectEbayButton() {
   const startOAuth = async () => {
     if (loading) return;
     setLoading(true);
+const authUrl = data.authorizeUrl;
 
-    // open popup FIRST to avoid blockers
-    popupRef.current = window.open(
-      "about:blank",
-      "ebay-oauth",
-      `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`
-    );
+// try popup first
+const popup = window.open(
+  authUrl,
+  '_blank',
+  'popup=yes,width=600,height=700,scrollbars=yes,resizable=yes,noopener'
+);
+
+// if popup blocked or iframe context, fall back to full-page nav
+if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+  // IMPORTANT: use top-level window so we escape the Lovable iframe
+  (window.top ?? window).location.href = authUrl;
+  return;
+}
+
+popupRef.current = popup;
 
     const start = async () => {
       const { data, error } = await supabase.functions.invoke("ebay-oauth-start", {
