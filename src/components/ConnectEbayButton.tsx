@@ -25,6 +25,14 @@ export const ConnectEbayButton = () => {
     if (loading) return;
 
     try {
+      // Open a blank popup synchronously to avoid popup blockers
+      const features = "width=600,height=700,scrollbars=yes,resizable=yes";
+      const prePopup = window.open("", "ebay-oauth", features);
+      if (!prePopup) {
+        throw new Error("Popup blocked. Allow popups for this site.");
+      }
+      popupRef.current = prePopup;
+
       setLoading(true);
 
       // Ensure signed in
@@ -33,18 +41,15 @@ export const ConnectEbayButton = () => {
 
       // Start OAuth (PROD + returnUrl)
       const { data, error } = await supabase.functions.invoke<{ authorizeUrl: string }>(START_FN, {
-        body: { environment: ENV, returnUrl: `${window.location.origin}/settings?ebay=connected` },
+        body: { environment: ENV, returnUrl: `${window.location.origin}/?ebay=connected` },
       });
       if (error) throw new Error(error.message || "Failed to start eBay OAuth");
       if (!data?.authorizeUrl) throw new Error("No authorization URL received");
 
-      // Open popup
-      popupRef.current = window.open(
-        data.authorizeUrl,
-        "ebay-oauth",
-        "width=600,height=700,scrollbars=yes,resizable=yes"
-      );
-      if (!popupRef.current) throw new Error("Popup blocked. Allow popups for this site.");
+      // Navigate the already-opened popup to the authorize URL
+      if (popupRef.current) {
+        popupRef.current.location.href = data.authorizeUrl;
+      }
 
       // Poll refresh-token (authoritative success)
       pollRef.current = window.setInterval(async () => {
