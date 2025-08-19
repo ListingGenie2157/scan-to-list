@@ -39,12 +39,28 @@ export const ConnectEbayButton = () => {
       if (!data?.authorizeUrl) throw new Error("No authorization URL received");
 
       // Open popup
+      console.log("Attempting to open popup with URL:", data.authorizeUrl);
       popupRef.current = window.open(
         data.authorizeUrl,
         "ebay-oauth",
         "width=600,height=700,scrollbars=yes,resizable=yes"
       );
-      if (!popupRef.current) throw new Error("Popup blocked. Allow popups for this site.");
+      
+      console.log("Popup reference:", popupRef.current);
+      
+      // Give popup a moment to open and check if it's actually blocked
+      setTimeout(() => {
+        if (!popupRef.current || popupRef.current.closed) {
+          cleanup();
+          setLoading(false);
+          toast({ 
+            title: "Popup Issue", 
+            description: "Unable to open popup window. Please check your popup blocker settings and try again.",
+            variant: "destructive" 
+          });
+          return;
+        }
+      }, 100);
 
       // Poll refresh-token (authoritative success)
       pollRef.current = window.setInterval(async () => {
