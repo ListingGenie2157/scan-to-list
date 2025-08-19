@@ -26,8 +26,10 @@ export const ConnectEbayButton = () => {
       if (!sess?.session) throw new Error("Sign in first.");
 
       // Start OAuth (PROD + returnUrl)
+      const accessToken = sess.session.access_token;
       const { data, error } = await supabase.functions.invoke<{ authorizeUrl: string }>(START_FN, {
         body: { environment: ENV, returnUrl: `${window.location.origin}/?ebay=connected` },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       window.clearTimeout(cancelTimer);
       if (error) throw new Error(error.message || "Failed to start eBay OAuth");

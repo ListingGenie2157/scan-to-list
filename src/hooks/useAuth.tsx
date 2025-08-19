@@ -54,7 +54,15 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   }, []);
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } finally {
+      // Ensure local state clears even if network fails
+      setSession(null);
+      setUser(null);
+      // Clear persisted session proactively
+      try { localStorage.removeItem('sb-auth-token'); } catch {}
+    }
   };
 
   const value = {
