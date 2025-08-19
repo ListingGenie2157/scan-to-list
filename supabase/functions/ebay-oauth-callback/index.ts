@@ -6,113 +6,262 @@ const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
-  "Access-Control-Max-Age": "86400",
+  "Access-Control-Max-Age": "86400"
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!;
-const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET")!;
-const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME") ?? "";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID") || "";
+const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET") || "";
+const APP_ORIGIN = Deno.env.get("APP_ORIGIN") || ""; // Your frontend URL
+const EBAY_SCOPES = Deno.env.get("EBAY_SCOPES") || "https://api.ebay.com/oauth/api_scope/sell.inventory";
 
-function b64urlToStr(input: string) {
+function b64urlToStr(input: string): string {
   input = input.replace(/-/g, "+").replace(/_/g, "/");
   while (input.length % 4) input += "=";
   return atob(input);
 }
 
+// Fixed version that properly handles multiple params
+function buildRedirectUrl(baseUrl: string, params: Record<string, string>): string {
+  const url = new URL(baseUrl);
+  Object.entries(params).forEach(([key, value]) => {
+    url.searchParams.set(key, value);
+  });
+  return url.toString();
+}
+
+// Simple redirect validation (add more origins as needed)
+function isValidRedirect(url: string): boolean {
+  try {
+    const u = new URL(url);
+    // Only allow http(s) protocols
+    if (!["http:", "https:"].includes(u.protocol)) return false;
+    // Add your allowed domains here
+    const allowedHosts = [
+      "localhost",
+      "lovable.dev",
+      // Add your production domain
+    ];
+    return allowedHosts.some(host => u.hostname.includes(host));
+  } catch {
+    return false;
+  }
+}
+
 serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  if (req.method !== "GET") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: corsHeaders
+    });
+  }
 
   try {
-    const url = new URL(req.url);
-    const err = url.searchParams.get("error");
-    if (err) {
-      const message = url.searchParams.get("error_description") || err;
-      return new Response(`Authorization failed: ${message}`, { status: 400, headers: corsHeaders });
+    // Check configuration
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !EBAY_CLIENT_ID || !EBAY_CLIENT_SECRET) {
+      const missing: string[] = [];
+      if (!SUPABASE_URL) missing.push("SUPABASE_URL");
+      if (!SUPABASE_SERVICE_ROLE_KEY) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+      if (!EBAY_CLIENT_ID) missing.push("EBAY_CLIENT_ID");
+      if (!EBAY_CLIENT_SECRET) missing.push("EBAY_CLIENT_SECRET");
+      
+      return new Response(JSON.stringify({ error: "Server configuration error", missing }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
     }
 
+    const url = new URL(req.url);
+    
+    // Handle eBay error
+    const error = url.searchParams.get("error");
+    if (error) {
+      const errorDesc = url.searchParams.get("error_description") || error;
+      
+      // Try to get return URL from state
+      let target = "";
+      const state = url.searchParams.get("state");
+      if (state) {
+        try {
+          const decoded = JSON.parse(b64urlToStr(state));
+          if (decoded?.r && isValidRedirect(decoded.r)) {
+            target = decoded.r;
+          }
+        } catch {
+          // Invalid state, ignore
+        }
+      }
+      
+      // Fallback to referer or APP_ORIGIN
+      if (!target) {
+        const referer = req.headers.get("referer");
+        if (referer && isValidRedirect(referer)) {
+          target = new URL(referer).origin + "/";
+        } else if (APP_ORIGIN) {
+          target = APP_ORIGIN + "/";
+        } else {
+          target = "/";
+        }
+      }
+      
+      const redirect = buildRedirectUrl(target, {
+        ebay: "error",
+        message: errorDesc
+      });
+      
+      return new Response(null, {
+        status: 302,
+        headers: { ...corsHeaders, Location: redirect }
+      });
+    }
+
+    // Success path
     const code = url.searchParams.get("code");
     const state = url.searchParams.get("state");
+    
     if (!code || !state) {
-      return new Response("Missing code or state", { status: 400, headers: corsHeaders });
+      return new Response("Missing authorization code or state", {
+        status: 400,
+        headers: corsHeaders
+      });
     }
 
-    const stateDecoded = b64urlToStr(state);
+    // Decode state
     let userId = "";
-    let returnTo: string | null = null;
+    let returnUrl = "";
+    
     try {
-      const parsed = JSON.parse(stateDecoded);
-      userId = parsed.u || "";
-      returnTo = parsed.r || null;
+      const decodedStr = b64urlToStr(state);
+      const parsed = JSON.parse(decodedStr);
+      userId = parsed?.u || "";
+      
+      if (parsed?.r && isValidRedirect(parsed.r)) {
+        returnUrl = parsed.r;
+      }
+      
+      // Check timestamp (optional security)
+      if (parsed?.t) {
+        const age = Date.now() - parsed.t;
+        if (age > 10 * 60 * 1000) { // 10 minutes
+          console.warn("State expired:", age, "ms old");
+        }
+      }
     } catch {
-      // Backward compatibility with old state format
-      userId = stateDecoded.split(":")[0];
+      return new Response("Invalid state parameter", {
+        status: 400,
+        headers: corsHeaders
+      });
     }
+
     if (!userId) {
-      return new Response("Invalid state", { status: 400, headers: corsHeaders });
+      return new Response("Invalid state (no user)", {
+        status: 400,
+        headers: corsHeaders
+      });
     }
 
-    const basic = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
+    // Fallback return URL
+    if (!returnUrl) {
+      const referer = req.headers.get("referer");
+      if (referer && isValidRedirect(referer)) {
+        returnUrl = new URL(referer).origin + "/";
+      } else if (APP_ORIGIN) {
+        returnUrl = APP_ORIGIN + "/";
+      } else {
+        returnUrl = "/";
+      }
+    }
 
-    // The redirect_uri used here MUST match what was sent in the authorize step.
-    const directCallbackUrl = `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-callback`;
-    const redirectForToken = EBAY_REDIRECT_RUNAME || directCallbackUrl;
-    const body = new URLSearchParams({
+    // MUST match oauth-start redirect_uri exactly
+    const callbackUrl = new URL("/functions/v1/ebay-oauth-callback", SUPABASE_URL).toString();
+
+    // Exchange code for tokens
+    const basic = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
+    const tokenBody = new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: redirectForToken,
+      redirect_uri: callbackUrl
     });
 
     const tokenResp = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
       method: "POST",
       headers: {
-        "Authorization": `Basic ${basic}`,
-        "Content-Type": "application/x-www-form-urlencoded",
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded"
       },
-      body: body.toString(),
+      body: tokenBody.toString()
     });
 
     const tokenJson = await tokenResp.json();
+    
     if (!tokenResp.ok) {
-      console.error("Token exchange failed", tokenJson);
-      return new Response(JSON.stringify(tokenJson), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      console.error("Token exchange failed:", tokenJson);
+      const redirect = buildRedirectUrl(returnUrl, {
+        ebay: "error",
+        message: "Token exchange failed"
+      });
+      
+      return new Response(null, {
+        status: 302,
+        headers: { ...corsHeaders, Location: redirect }
+      });
     }
 
-    const access_token: string = tokenJson.access_token;
-    const refresh_token: string | undefined = tokenJson.refresh_token;
-    const expires_in: number = tokenJson.expires_in;
+    const access_token = tokenJson.access_token;
+    const refresh_token = tokenJson.refresh_token;
+    const expires_in = tokenJson.expires_in || 7200;
+    const expires_at = new Date(Date.now() + Math.max(0, expires_in - 60) * 1000).toISOString();
 
-    const expires_at = new Date(Date.now() + (expires_in - 60) * 1000).toISOString();
-
+    // Store tokens
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
+    const { error: dbError } = await supabase
+      .from("oauth_tokens")
+      .upsert({
+        provider: "ebay",
+        access_token,
+        refresh_token: refresh_token || null,
+        user_id: userId,
+        scope: EBAY_SCOPES, // Use the same scope that was requested
+        expires_at
+      }, {
+        onConflict: "user_id,provider"
+      });
 
-    const { error } = await supabase.from("oauth_tokens").upsert({
-      provider: "ebay",
-      access_token,
-      refresh_token: refresh_token ?? null,
-      user_id: userId,
-      scope: "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
-      expires_at,
-    }, {
-      onConflict: 'user_id,provider'
-    });
-
-    if (error) {
-      console.error("Failed to store tokens", error);
-      return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (dbError) {
+      console.error("Failed to store tokens:", dbError);
+      const redirect = buildRedirectUrl(returnUrl, {
+        ebay: "error",
+        message: "Failed to store credentials"
+      });
+      
+      return new Response(null, {
+        status: 302,
+        headers: { ...corsHeaders, Location: redirect }
+      });
     }
 
-    // Get the origin from the referer header or use a fallback
-    const referer = req.headers.get("referer");
-    const origin = referer ? new URL(referer).origin : "https://id-preview--8df2d048-f9db-4afe-90c6-9827cababee3.lovable.app";
-    const redirectTo = returnTo || url.searchParams.get("redirect_to") || `${origin}/?ebay=connected`;
-    return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirectTo } });
+    // Success!
+    console.log("Successfully stored tokens for user:", userId);
+    const successRedirect = buildRedirectUrl(returnUrl, {
+      ebay: "connected"
+    });
+    
+    return new Response(null, {
+      status: 302,
+      headers: { ...corsHeaders, Location: successRedirect }
+    });
+    
   } catch (e) {
-    console.error("ebay-oauth-callback error", e);
+    console.error("Unexpected error in callback:", e);
     return new Response(JSON.stringify({ error: String(e) }), {
       status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
     });
   }
 });
