@@ -13,7 +13,7 @@ export function useScannerSettings() {
       } else {
         setMirrorCovers(v === '1');
       }
-    } catch {
+    } catch (error) {
       setMirrorCovers(true);
     }
   }, []);
@@ -21,7 +21,9 @@ export function useScannerSettings() {
   useEffect(() => {
     try {
       localStorage.setItem(KEY, mirrorCovers ? '1' : '0');
-    } catch {}
+    } catch (error) {
+      // Ignore persistence errors
+    }
   }, [mirrorCovers]);
 
   return { mirrorCovers, setMirrorCovers } as const;

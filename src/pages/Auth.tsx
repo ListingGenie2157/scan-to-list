@@ -41,8 +41,9 @@ const Auth = () => {
       if (error) throw error;
 
       setMessage('Check your email for the confirmation link!');
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Sign up failed';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -63,8 +64,9 @@ const Auth = () => {
       if (error) throw error;
 
       navigate('/');
-    } catch (error: any) {
-      setError(error.message);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Sign in failed';
+      setError(message);
     } finally {
       setLoading(false);
     }

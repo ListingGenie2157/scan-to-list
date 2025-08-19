@@ -16,7 +16,7 @@ export type LookupMeta = {
 export function normalizeScan(raw: string): string | null {
   if (!raw) return null;
   // Remove non-digits (keep X for ISBN10 check but we'll convert to 13 anyway)
-  let s = String(raw).trim();
+  const s = String(raw).trim();
   let digits = s.replace(/[^0-9Xx]/g, "");
 
   // EAN-13 + EAN-5 addon (18 digits) -> trim to 13
@@ -55,7 +55,7 @@ export async function lookupIsbn(isbn13: string): Promise<LookupMeta> {
   });
   if (error) throw error;
   // Edge returns meta or null
-  return (data as any) ?? null;
+  return (data as LookupMeta) ?? null;
 }
 
 export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number> {
@@ -71,7 +71,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number>
     .eq('user_id', user.id)
     .eq('isbn13', isbn)
     .maybeSingle();
-  if (exErr && (exErr as any).code !== 'PGRST116') throw exErr;
+  if (exErr && (exErr as { code?: string }).code !== 'PGRST116') throw exErr;
 
   if (existing) {
     const { error: updErr } = await supabase
@@ -130,7 +130,7 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
       }
     });
     if (error) throw error;
-    const price = (data as any)?.price as number | undefined;
+    const price = (data as { price?: number } | null | undefined)?.price as number | undefined;
     if (typeof price === 'number' && isFinite(price)) {
       await supabase.from('items').update({ suggested_price: price }).eq('id', itemId);
     }
