@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, Link as LinkIcon } from "lucide-react";
@@ -9,17 +9,6 @@ const ENV = "production";                       // force prod
 
 export const ConnectEbayButton = () => {
   const [loading, setLoading] = useState(false);
-  const popupRef = useRef<Window | null>(null);
-  const pollRef = useRef<number | null>(null);
-  const timeoutRef = useRef<number | null>(null);
-
-  const cleanup = useCallback(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-    if (timeoutRef.current) { clearTimeout(timeoutRef.current); timeoutRef.current = null; }
-    if (popupRef.current && !popupRef.current.closed) popupRef.current.close();
-  }, []);
-
-  useEffect(() => () => cleanup(), [cleanup]);
 
   const handleConnect = async () => {
     if (loading) return;
@@ -33,58 +22,20 @@ export const ConnectEbayButton = () => {
 
       // Start OAuth (PROD + returnUrl)
       const { data, error } = await supabase.functions.invoke<{ authorizeUrl: string }>(START_FN, {
-        body: { environment: ENV, returnUrl: `${window.location.origin}/settings?ebay=connected` },
+        body: { environment: ENV, returnUrl: `${window.location.origin}/?ebay=connected` },
       });
       if (error) throw new Error(error.message || "Failed to start eBay OAuth");
       if (!data?.authorizeUrl) throw new Error("No authorization URL received");
 
-      // Open popup
-      popupRef.current = window.open(
-        data.authorizeUrl,
-        "ebay-oauth",
-        "width=600,height=700,scrollbars=yes,resizable=yes"
-      );
-      if (!popupRef.current) throw new Error("Popup blocked. Allow popups for this site.");
-
-      // Poll refresh-token (authoritative success)
-      pollRef.current = window.setInterval(async () => {
-        try {
-          // If user closed popup → treat as cancel
-          if (popupRef.current?.closed) {
-            cleanup();
-            setLoading(false);
-            toast({ title: "Cancelled", description: "Popup closed before connecting." });
-            return;
-          }
-
-          const { data: tokenData } = await supabase.functions.invoke<{ access_token?: string }>(
-            "ebay-refresh-token",
-            { body: { environment: ENV } }
-          );
-
-          if (tokenData?.access_token) {
-            cleanup();
-            setLoading(false);
-            toast({ title: "Success", description: "eBay (Production) connected." });
-            // optional: refresh UI
-            setTimeout(() => window.location.reload(), 800);
-          }
-        } catch {
-          // ignore until success; real errors will surface on button retry
-        }
-      }, 2000);
-
-      // Hard timeout (5 min)
-      timeoutRef.current = window.setTimeout(() => {
-        cleanup();
-        setLoading(false);
-        toast({ title: "Timeout", description: "Connection timed out. Try again.", variant: "destructive" });
-      }, 5 * 60 * 1000);
-
+      // Redirect current window to avoid any popup blockers entirely
+      window.location.assign(data.authorizeUrl);
     } catch (e: any) {
-      cleanup();
       setLoading(false);
-      toast({ title: "Error", description: e?.message || "Failed to connect to eBay", variant: "destructive" });
+      const body = e?.context?.body;
+      const details = typeof body === "string" ? body : body ? JSON.stringify(body) : null;
+      const description = details || e?.message || (typeof e === "string" ? e : "Failed to connect to eBay");
+      toast({ title: "Connect failed", description, variant: "destructive" });
+      console.error("eBay connect error:", e);
     }
   };
 
