@@ -19,14 +19,32 @@ function b64url(input: string) {
 }
 
 serve(async (req) => {
-  console.log("Function called with method:", req.method);
+  console.log("Function called with method:", req.method);    
   
   if (req.method === "OPTIONS") {
     console.log("Handling OPTIONS request");
     return new Response(null, { headers: corsHeaders });
   }
+// --- Attach the logged-in user to this request ---
+const authHeader = req.headers.get("Authorization") ?? "";
 
-  try {
+const supa = createClient(SUPABASE_URL!, SUPABASE_ANON_KEY!, {
+  global: { headers: { Authorization: authHeader } },
+});
+
+const { data: { user }, error: userErr } = await supa.auth.getUser();
+
+if (userErr || !user) {
+  console.log("401: missing/invalid auth", userErr);
+  return new Response(JSON.stringify({ error: "Not signed in" }), {
+    status: 401,
+    headers: corsHeaders,
+  });
+}
+
+console.log("ebay-oauth-start for user:", user.id);
+
+   try {
     console.log("Starting eBay OAuth flow");
     
     // Check environment variables first
