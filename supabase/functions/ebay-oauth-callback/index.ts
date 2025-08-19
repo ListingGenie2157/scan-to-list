@@ -68,6 +68,7 @@ serve(async (req) => {
     const access_token: string = tokenJson.access_token;
     const refresh_token: string | undefined = tokenJson.refresh_token;
     const expires_in: number = tokenJson.expires_in;
+    const scope: string | undefined = tokenJson.scope;
 
     const expires_at = new Date(Date.now() + (expires_in - 60) * 1000).toISOString();
 
@@ -78,7 +79,7 @@ serve(async (req) => {
       access_token,
       refresh_token: refresh_token ?? null,
       user_id: userId,
-      scope: "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
+      scope: scope || "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
       expires_at,
     }, {
       onConflict: 'user_id,provider'

@@ -109,8 +109,10 @@ console.log("ebay-oauth-start for user:", user.id);
 
     console.log("User authenticated:", user.id);
 
-    // Use the correct eBay scope format - just inventory for now to test
-    const scopes = "https://api.ebay.com/oauth/api_scope/sell.inventory";
+    // Use scopes from env when provided; otherwise request both Sell and Browse read-only scopes
+    const scopes = EBAY_SCOPES && EBAY_SCOPES.trim().length > 0
+      ? EBAY_SCOPES
+      : "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/buy.browse.readonly";
     const state = b64url(`${user.id}:${Date.now()}`);
     
     console.log("Generated state:", state);
