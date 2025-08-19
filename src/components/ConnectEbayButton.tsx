@@ -27,44 +27,44 @@ export const ConnectEbayButton = () => {
     try {
       setLoading(true);
 
-      // Open popup immediately to avoid popup blocker
-      console.log("Opening popup immediately...");
+      // Ensure signed in first
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session) {
+        throw new Error("Please sign in first.");
+      }
+
+      // Generate OAuth URL directly to avoid popup blocker
+      const userId = sess.session.user.id;
+      const state = btoa(`${userId}:${Date.now()}`).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+      const callbackUrl = "https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-callback";
+      
+      const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");
+      authorizeUrl.searchParams.set("client_id", "dreamyre-li-PRD-08114632d-4a65373b");
+      authorizeUrl.searchParams.set("response_type", "code");
+      authorizeUrl.searchParams.set("redirect_uri", callbackUrl);
+      authorizeUrl.searchParams.set("scope", "https://api.ebay.com/oauth/api_scope/sell.inventory");
+      authorizeUrl.searchParams.set("state", state);
+
+      console.log("Opening popup with direct URL:", authorizeUrl.toString());
+      
+      // Open popup immediately with the OAuth URL
       popupRef.current = window.open(
-        "about:blank",
+        authorizeUrl.toString(),
         "ebay-oauth",
-        "width=600,height=700,scrollbars=yes,resizable=yes"
+        "width=600,height=700,scrollbars=yes,resizable=yes,location=yes"
       );
       
       if (!popupRef.current) {
         setLoading(false);
-        throw new Error("Popup blocked. Please allow popups for this site and try again.");
+        toast({ 
+          title: "Popup Blocked", 
+          description: "Please allow popups for this site in your browser settings and try again.",
+          variant: "destructive" 
+        });
+        return;
       }
 
-      console.log("Popup opened successfully:", popupRef.current);
-
-      // Ensure signed in
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess?.session) {
-        popupRef.current.close();
-        throw new Error("Sign in first.");
-      }
-
-      // Start OAuth (PROD + returnUrl)
-      const { data, error } = await supabase.functions.invoke<{ authorizeUrl: string }>(START_FN, {
-        body: { environment: ENV, returnUrl: `${window.location.origin}/settings?ebay=connected` },
-      });
-      if (error) {
-        popupRef.current.close();
-        throw new Error(error.message || "Failed to start eBay OAuth");
-      }
-      if (!data?.authorizeUrl) {
-        popupRef.current.close();
-        throw new Error("No authorization URL received");
-      }
-
-      // Update popup location with the authorization URL
-      console.log("Redirecting popup to:", data.authorizeUrl);
-      popupRef.current.location.href = data.authorizeUrl;
+      console.log("Popup opened successfully");
 
       // Poll refresh-token (authoritative success)
       pollRef.current = window.setInterval(async () => {
