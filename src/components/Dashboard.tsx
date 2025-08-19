@@ -9,9 +9,11 @@ import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
 import { ConnectEbayButton } from "./ConnectEbayButton";
 import { useToast } from "@/hooks/use-toast";
+import { Navigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
 export const Dashboard = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading } = useAuth();
   const { toast } = useToast();
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [autoOpenScanner, setAutoOpenScanner] = useState(false);
@@ -31,6 +33,20 @@ export const Dashboard = () => {
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, [toast]);
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Redirect to auth if not authenticated
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
 
   const handleUploadSuccess = () => {
     // Switch to inventory tab and refresh the data

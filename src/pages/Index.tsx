@@ -1,12 +1,7 @@
 import { Dashboard } from "@/components/Dashboard";
-import ProtectedRoute from "@/components/ProtectedRoute";
 
 const Index = () => {
-  return (
-    <ProtectedRoute>
-      <Dashboard />
-    </ProtectedRoute>
-  );
+  return <Dashboard />;
 };
 
 export default Index;
