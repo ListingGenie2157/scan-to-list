@@ -1,14 +1,12 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// No Supabase client needed for this function
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 // We no longer require service role or OAuth for pricing via Finding API
 const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID") || ""; // May equal App ID
 const EBAY_APP_ID = Deno.env.get("EBAY_APP_ID") || EBAY_CLIENT_ID; // Use explicit APP ID if provided
@@ -25,19 +23,6 @@ serve(async (req) => {
 
   try {
     console.log("eBay pricing function called");
-    
-    // Use anon client for auth (reads the user's JWT)
-    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
-    });
-
-    const { data: { user }, error: userError } = await supabaseAuth.auth.getUser();
-    console.log("User lookup result:", { user: user?.id, error: userError });
-    
-    if (!user) {
-      console.log("No user found - unauthorized");
-      return json({ error: "Unauthorized" }, 401);
-    }
 
     const requestBody = await req.json().catch((e) => {
       console.log("JSON parse error:", e);
