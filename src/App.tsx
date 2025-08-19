@@ -1,14 +1,3 @@
-import { ConnectEbayButton } from "@/components/ConnectEbayButton";
-
-export default function App() {
-  return (
-    <div className="p-4">
-      {/* existing UI */}
-      <ConnectEbayButton />
-    </div>
-  );
-}
-
 import React from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -43,4 +32,4 @@ const App = () => {
   );
 };
 
-
+export default App
