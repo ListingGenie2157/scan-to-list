@@ -27,40 +27,44 @@ export const ConnectEbayButton = () => {
     try {
       setLoading(true);
 
+      // Open popup immediately to avoid popup blocker
+      console.log("Opening popup immediately...");
+      popupRef.current = window.open(
+        "about:blank",
+        "ebay-oauth",
+        "width=600,height=700,scrollbars=yes,resizable=yes"
+      );
+      
+      if (!popupRef.current) {
+        setLoading(false);
+        throw new Error("Popup blocked. Please allow popups for this site and try again.");
+      }
+
+      console.log("Popup opened successfully:", popupRef.current);
+
       // Ensure signed in
       const { data: sess } = await supabase.auth.getSession();
-      if (!sess?.session) throw new Error("Sign in first.");
+      if (!sess?.session) {
+        popupRef.current.close();
+        throw new Error("Sign in first.");
+      }
 
       // Start OAuth (PROD + returnUrl)
       const { data, error } = await supabase.functions.invoke<{ authorizeUrl: string }>(START_FN, {
         body: { environment: ENV, returnUrl: `${window.location.origin}/settings?ebay=connected` },
       });
-      if (error) throw new Error(error.message || "Failed to start eBay OAuth");
-      if (!data?.authorizeUrl) throw new Error("No authorization URL received");
+      if (error) {
+        popupRef.current.close();
+        throw new Error(error.message || "Failed to start eBay OAuth");
+      }
+      if (!data?.authorizeUrl) {
+        popupRef.current.close();
+        throw new Error("No authorization URL received");
+      }
 
-      // Open popup
-      console.log("Attempting to open popup with URL:", data.authorizeUrl);
-      popupRef.current = window.open(
-        data.authorizeUrl,
-        "ebay-oauth",
-        "width=600,height=700,scrollbars=yes,resizable=yes"
-      );
-      
-      console.log("Popup reference:", popupRef.current);
-      
-      // Give popup a moment to open and check if it's actually blocked
-      setTimeout(() => {
-        if (!popupRef.current || popupRef.current.closed) {
-          cleanup();
-          setLoading(false);
-          toast({ 
-            title: "Popup Issue", 
-            description: "Unable to open popup window. Please check your popup blocker settings and try again.",
-            variant: "destructive" 
-          });
-          return;
-        }
-      }, 100);
+      // Update popup location with the authorization URL
+      console.log("Redirecting popup to:", data.authorizeUrl);
+      popupRef.current.location.href = data.authorizeUrl;
 
       // Poll refresh-token (authoritative success)
       pollRef.current = window.setInterval(async () => {
