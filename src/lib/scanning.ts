@@ -55,7 +55,21 @@ export async function lookupIsbn(isbn13: string): Promise<LookupMeta> {
   });
   if (error) throw error;
   // Edge returns meta or null
-  return (data as any) ?? null;
+  let meta = (data as any) ?? null;
+  // Fallback cover via Open Library if missing
+  if (meta && (!meta.coverUrl || typeof meta.coverUrl !== 'string')) {
+    const openLib = `https://covers.openlibrary.org/b/isbn/${isbn13}-L.jpg`;
+    // Lightweight check if the image exists (OpenLibrary returns 1x1 if not found)
+    try {
+      const resp = await fetch(openLib, { method: 'HEAD' });
+      if (resp.ok) {
+        meta = { ...meta, coverUrl: openLib };
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return meta;
 }
 
 export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number> {

@@ -347,12 +347,13 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
                 {item.photos?.public_url ? (
                   <img 
-                    src={item.photos.public_url} 
+                    src={item.photos.public_url}
                     alt={item.title || 'Item photo'}
                     className="w-full h-full object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-cover.svg'; }}
                   />
                 ) : (
-                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                  <img src="/placeholder-cover.svg" alt="Placeholder cover" className="w-1/2 opacity-70" />
                 )}
               </div>
               
@@ -401,12 +402,13 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               <div className="w-16 h-20 bg-muted rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                 {item.photos?.public_url ? (
                   <img 
-                    src={item.photos.public_url} 
+                    src={item.photos.public_url}
                     alt={item.title || 'Item photo'}
                     className="w-full h-full object-cover"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-cover.svg'; }}
                   />
                 ) : (
-                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                  <img src="/placeholder-cover.svg" alt="Placeholder cover" className="w-12 h-16 opacity-70" />
                 )}
               </div>
               
@@ -489,12 +491,13 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
               {item.photos?.public_url ? (
                 <img 
-                  src={item.photos.public_url} 
+                  src={item.photos.public_url}
                   alt={item.title || 'Item photo'}
                   className="w-full h-full object-cover"
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder-cover.svg'; }}
                 />
               ) : (
-                <BookOpen className="w-6 h-6 text-muted-foreground" />
+                <img src="/placeholder-cover.svg" alt="Placeholder cover" className="w-1/2 opacity-70" />
               )}
             </div>
 

@@ -119,11 +119,15 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
       }
 
       const itemId = await upsertItem(meta);
-      if (mirrorCovers && meta.coverUrl) {
-        try {
-          await storeCover(itemId, meta.coverUrl);
-        } catch (e) {
-          console.warn('Cover mirror failed:', e);
+      // Mirror cover if available; otherwise keep external URL fallback for display
+      if (mirrorCovers) {
+        const candidate = meta.coverUrl || (isbn13 ? `https://covers.openlibrary.org/b/isbn/${isbn13}-L.jpg` : null);
+        if (candidate) {
+          try {
+            await storeCover(itemId, candidate);
+          } catch (e) {
+            console.warn('Cover mirror failed:', e);
+          }
         }
       }
 
