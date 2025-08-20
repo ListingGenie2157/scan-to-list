@@ -244,6 +244,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
         // Process the book cover with OCR
         try {
           console.log('Starting OCR processing for:', photoData.id);
+          console.log('📸 Starting OCR processing for photo:', photoData.id);
           console.log('OCR request payload:', { 
             photoId: photoData.id, 
             imageUrl: publicUrl,
@@ -257,6 +258,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
               batchSettings: batchSettings
             }
           });
+          console.log('📋 OCR response:', { ocrData, ocrError });
 
           console.log('OCR response data:', ocrData);
           console.log('OCR response error:', ocrError);

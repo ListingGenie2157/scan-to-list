@@ -10,8 +10,10 @@ export function ConnectEbayButton() {
 
   const checkConnectionStatus = async () => {
     try {
+      console.log("🔄 Checking eBay connection status...");
       // Try to refresh token - if successful, user is connected
       const { data, error } = await supabase.functions.invoke('ebay-refresh-token');
+      console.log("📊 eBay refresh response:", { data, error });
       
       if (data && !error) {
         toast({ 
@@ -29,12 +31,13 @@ export function ConnectEbayButton() {
       }
     } catch (err) {
       // Not connected yet, that's ok
-      console.log("Connection check failed - user may have cancelled");
+      console.log("❌ Connection check failed:", err);
     }
     return false;
   };
 
   const startOAuth = async () => {
+    console.log("🚀 Starting eBay OAuth process...");
     if (loading) return;
     setLoading(true);
 
@@ -88,6 +91,7 @@ export function ConnectEbayButton() {
       }, 30_000);
 
       // Get the OAuth URL from your edge function
+      console.log("📡 Calling ebay-oauth-start function...");
       const { data, error } = await supabase.functions.invoke<{ authorizeUrl: string }>(
         "ebay-oauth-start",
         { 
@@ -97,6 +101,7 @@ export function ConnectEbayButton() {
           } 
         }
       );
+      console.log("📊 OAuth start response:", { data, error });
 
       // Clear timeout since we got a response
       if (timeoutId) { 
