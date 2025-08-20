@@ -29,9 +29,17 @@ function b64urlToStr(input: string): string {
   return atob(input);
 }
 
-// Fixed version that properly handles multiple params
+// Fixed builder that tolerates relative/invalid base and falls back to APP_ORIGIN or SUPABASE_URL origin
 function buildRedirectUrl(baseUrl: string, params: Record<string, string>): string {
-  const url = new URL(baseUrl);
+  const fallbackOrigin = APP_ORIGIN || (SUPABASE_URL ? new URL(SUPABASE_URL).origin : "");
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    const base = fallbackOrigin || "https://example.com"; // example.com only used if no envs are configured
+    const path = baseUrl && baseUrl.startsWith("/") ? baseUrl : "/";
+    url = new URL(path, base);
+  }
   Object.entries(params).forEach(([key, value]) => {
     url.searchParams.set(key, value);
   });
@@ -179,6 +187,8 @@ serve(async (req) => {
         returnUrl = new URL(referer).origin + "/";
       } else if (APP_ORIGIN) {
         returnUrl = APP_ORIGIN + "/";
+      } else if (SUPABASE_URL) {
+        returnUrl = new URL(SUPABASE_URL).origin + "/";
       } else {
         returnUrl = "/";
       }
