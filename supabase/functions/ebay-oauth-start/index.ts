@@ -88,7 +88,10 @@ serve(async (req) => {
 
     // Build redirect URI (prefer RUName if provided)
     const callbackUrl = new URL("/functions/v1/ebay-oauth-callback", SUPABASE_URL).toString();
-    const redirectUri = EBAY_REDIRECT_RUNAME || callbackUrl;
+    // If EBAY_REDIRECT_RUNAME is accidentally set to a URL, fall back to direct callback
+    const useRuName = EBAY_REDIRECT_RUNAME && !/^https?:/i.test(EBAY_REDIRECT_RUNAME);
+    const redirectUri = useRuName ? EBAY_REDIRECT_RUNAME : callbackUrl;
+    console.log("[oauth-start] redirect_uri:", redirectUri, "useRuName=", useRuName);
 
     // Encode state with user info
     const statePayload = JSON.stringify({

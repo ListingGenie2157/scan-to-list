@@ -205,7 +205,9 @@ serve(async (req) => {
 
     // MUST match oauth-start redirect_uri exactly (RUName preferred)
     const callbackUrl = new URL("/functions/v1/ebay-oauth-callback", SUPABASE_URL).toString();
-    const redirectForToken = EBAY_REDIRECT_RUNAME || callbackUrl;
+    const useRuName = EBAY_REDIRECT_RUNAME && !/^https?:/i.test(EBAY_REDIRECT_RUNAME);
+    const redirectForToken = useRuName ? EBAY_REDIRECT_RUNAME : callbackUrl;
+    console.log("[oauth-callback] redirect_uri for token:", redirectForToken, "useRuName=", useRuName);
 
     // Exchange code for tokens
     const basic = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
