@@ -184,6 +184,15 @@ serve(async (req) => {
       }
     }
 
+    // Guard userId: must be a UUID to avoid DB errors
+    const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    console.log("[ebay-callback] decoded state:", { stateRaw: state, userId, returnUrl });
+    if (!userId || !uuidV4.test(userId)) {
+      console.error("[ebay-callback] Bad userId in state:", userId);
+      const redirect = buildRedirectUrl(returnUrl || "/", { ebay: "error", message: "Invalid user id" });
+      return new Response(null, { status: 302, headers: { ...corsHeaders, Location: redirect } });
+    }
+
     // MUST match oauth-start redirect_uri exactly (RUName preferred)
     const callbackUrl = new URL("/functions/v1/ebay-oauth-callback", SUPABASE_URL).toString();
     const redirectForToken = EBAY_REDIRECT_RUNAME || callbackUrl;
