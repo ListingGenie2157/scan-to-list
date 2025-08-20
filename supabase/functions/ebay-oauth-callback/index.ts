@@ -13,6 +13,7 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
 const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID") || "";
 const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET") || "";
+const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME") || "";
 const APP_ORIGIN = Deno.env.get("APP_ORIGIN") || ""; // Your frontend URL
 const EBAY_SCOPES = Deno.env.get("EBAY_SCOPES") || "https://api.ebay.com/oauth/api_scope/sell.inventory";
 
@@ -177,8 +178,9 @@ serve(async (req) => {
       }
     }
 
-    // MUST match oauth-start redirect_uri exactly
+    // MUST match oauth-start redirect_uri exactly (RUName preferred)
     const callbackUrl = new URL("/functions/v1/ebay-oauth-callback", SUPABASE_URL).toString();
+    const redirectForToken = EBAY_REDIRECT_RUNAME || callbackUrl;
 
     // Exchange code for tokens
     const basic = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
@@ -194,7 +196,11 @@ serve(async (req) => {
         Authorization: `Basic ${basic}`,
         "Content-Type": "application/x-www-form-urlencoded"
       },
-      body: tokenBody.toString()
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: redirectForToken,
+      }).toString()
     });
 
     const tokenJson = await tokenResp.json();

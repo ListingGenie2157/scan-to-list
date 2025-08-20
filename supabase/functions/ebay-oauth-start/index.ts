@@ -15,6 +15,7 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID") || "";
+const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME") || "";
 const EBAY_SCOPES = Deno.env.get("EBAY_SCOPES") || "https://api.ebay.com/oauth/api_scope/sell.inventory";
 
 function b64url(input: string): string {
@@ -79,8 +80,9 @@ serve(async (req) => {
       // ignore invalid JSON
     }
 
-    // Build callback URL (must match in callback function)
+    // Build redirect URI (prefer RUName if provided)
     const callbackUrl = new URL("/functions/v1/ebay-oauth-callback", SUPABASE_URL).toString();
+    const redirectUri = EBAY_REDIRECT_RUNAME || callbackUrl;
 
     // Encode state with user info
     const statePayload = JSON.stringify({
@@ -94,7 +96,7 @@ serve(async (req) => {
     const authorizeUrl = new URL("https://auth.ebay.com/oauth2/authorize");
     authorizeUrl.searchParams.set("client_id", EBAY_CLIENT_ID);
     authorizeUrl.searchParams.set("response_type", "code");
-    authorizeUrl.searchParams.set("redirect_uri", callbackUrl);
+    authorizeUrl.searchParams.set("redirect_uri", redirectUri);
     authorizeUrl.searchParams.set("scope", EBAY_SCOPES);
     authorizeUrl.searchParams.set("state", state);
 
