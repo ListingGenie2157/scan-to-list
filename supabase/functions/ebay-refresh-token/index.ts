@@ -57,30 +57,35 @@ serve(async (req) => {
       });
     }
 
-    // Check if user has eBay tokens stored
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('ebay_access_token, ebay_refresh_token, ebay_token_expires_at')
+    // Check if user has eBay tokens stored in oauth_tokens table
+    const { data: tokens, error: tokenError } = await supabase
+      .from('oauth_tokens')
+      .select('access_token, refresh_token, expires_at')
       .eq('user_id', user.id)
-      .single();
+      .eq('provider', 'ebay')
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-    if (profileError || !profile) {
-      return new Response(JSON.stringify({ error: "User profile not found" }), {
-        status: 404,
+    if (tokenError) {
+      console.error("Error fetching eBay tokens:", tokenError);
+      return new Response(JSON.stringify({ error: "Database error" }), {
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
-    if (!profile.ebay_access_token || !profile.ebay_refresh_token) {
+    if (!tokens || tokens.length === 0) {
       return new Response(JSON.stringify({ error: "eBay not connected" }), {
         status: 404,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
       });
     }
 
+    const ebayToken = tokens[0];
+
     // Check if token needs refresh (expires within 5 minutes)
     const now = new Date();
-    const expiresAt = new Date(profile.ebay_token_expires_at);
+    const expiresAt = new Date(ebayToken.expires_at);
     const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000);
 
     if (expiresAt > fiveMinutesFromNow) {
@@ -88,7 +93,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         success: true, 
         message: "Token is still valid",
-        expires_at: profile.ebay_token_expires_at
+        expires_at: ebayToken.expires_at
       }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -104,7 +109,7 @@ serve(async (req) => {
       },
       body: new URLSearchParams({
         grant_type: "refresh_token",
-        refresh_token: profile.ebay_refresh_token,
+        refresh_token: ebayToken.refresh_token,
         scope: "https://api.ebay.com/oauth/api_scope/sell.inventory"
       })
     });
@@ -113,16 +118,12 @@ serve(async (req) => {
       const errorText = await refreshResponse.text();
       console.error("eBay refresh token error:", errorText);
       
-      // If refresh fails, clear the tokens so user can reconnect
+      // If refresh fails, delete the invalid tokens so user can reconnect
       await supabase
-        .from('user_profiles')
-        .update({
-          ebay_access_token: null,
-          ebay_refresh_token: null,
-          ebay_token_expires_at: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('user_id', user.id);
+        .from('oauth_tokens')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('provider', 'ebay');
 
       return new Response(JSON.stringify({ error: "Token refresh failed, please reconnect" }), {
         status: 401,
@@ -136,14 +137,15 @@ serve(async (req) => {
     const newExpiresAt = new Date(now.getTime() + (tokenData.expires_in * 1000));
     
     const { error: updateError } = await supabase
-      .from('user_profiles')
+      .from('oauth_tokens')
       .update({
-        ebay_access_token: tokenData.access_token,
-        ebay_refresh_token: tokenData.refresh_token || profile.ebay_refresh_token, // Keep old refresh token if not provided
-        ebay_token_expires_at: newExpiresAt.toISOString(),
+        access_token: tokenData.access_token,
+        refresh_token: tokenData.refresh_token || ebayToken.refresh_token, // Keep old refresh token if not provided
+        expires_at: newExpiresAt.toISOString(),
         updated_at: new Date().toISOString()
       })
-      .eq('user_id', user.id);
+      .eq('user_id', user.id)
+      .eq('provider', 'ebay');
 
     if (updateError) {
       console.error("Failed to update tokens:", updateError);
