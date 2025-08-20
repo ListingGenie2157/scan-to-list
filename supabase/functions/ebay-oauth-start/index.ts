@@ -54,6 +54,14 @@ serve(async (req) => {
       });
     }
 
+    // Require valid RUName (not a URL) to avoid eBay path errors
+    if (!EBAY_REDIRECT_RUNAME || /^https?:/i.test(EBAY_REDIRECT_RUNAME)) {
+      return new Response(JSON.stringify({
+        error: "EBAY_REDIRECT_RUNAME is missing or invalid",
+        hint: "Set EBAY_REDIRECT_RUNAME to your eBay Redirect URL name (RuName), not a URL",
+      }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     // Authenticate user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
@@ -88,10 +96,8 @@ serve(async (req) => {
 
     // Build redirect URI (prefer RUName if provided)
     const callbackUrl = new URL("/functions/v1/ebay-oauth-callback", SUPABASE_URL).toString();
-    // If EBAY_REDIRECT_RUNAME is accidentally set to a URL, fall back to direct callback
-    const useRuName = EBAY_REDIRECT_RUNAME && !/^https?:/i.test(EBAY_REDIRECT_RUNAME);
-    const redirectUri = useRuName ? EBAY_REDIRECT_RUNAME : callbackUrl;
-    console.log("[oauth-start] redirect_uri:", redirectUri, "useRuName=", useRuName);
+    const redirectUri = EBAY_REDIRECT_RUNAME; // must be RUName per eBay requirements
+    console.log("[oauth-start] redirect_uri (RUName):", redirectUri, "callbackUrl:", callbackUrl);
 
     // Encode state with user info
     const statePayload = JSON.stringify({

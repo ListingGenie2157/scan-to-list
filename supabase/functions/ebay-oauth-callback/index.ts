@@ -204,10 +204,15 @@ serve(async (req) => {
     }
 
     // MUST match oauth-start redirect_uri exactly (RUName preferred)
+    // Require valid RUName (not a URL) for token exchange to match the authorize step
+    if (!EBAY_REDIRECT_RUNAME || /^https?:/i.test(EBAY_REDIRECT_RUNAME)) {
+      console.error("[oauth-callback] Missing or invalid EBAY_REDIRECT_RUNAME");
+      const bad = buildRedirectUrl(returnUrl, { ebay: "error", message: "Invalid eBay configuration" });
+      return new Response(null, { status: 302, headers: { ...corsHeaders, Location: bad } });
+    }
     const callbackUrl = new URL("/functions/v1/ebay-oauth-callback", SUPABASE_URL).toString();
-    const useRuName = EBAY_REDIRECT_RUNAME && !/^https?:/i.test(EBAY_REDIRECT_RUNAME);
-    const redirectForToken = useRuName ? EBAY_REDIRECT_RUNAME : callbackUrl;
-    console.log("[oauth-callback] redirect_uri for token:", redirectForToken, "useRuName=", useRuName);
+    const redirectForToken = EBAY_REDIRECT_RUNAME;
+    console.log("[oauth-callback] redirect_uri for token (RUName):", redirectForToken, "callbackUrl:", callbackUrl);
 
     // Exchange code for tokens
     const basic = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
