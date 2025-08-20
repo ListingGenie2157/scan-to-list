@@ -15,7 +15,13 @@ const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID") || "";
 const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET") || "";
 const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME") || "";
 const APP_ORIGIN = Deno.env.get("APP_ORIGIN") || ""; // Your frontend URL
-const EBAY_SCOPES = Deno.env.get("EBAY_SCOPES") || "https://api.ebay.com/oauth/api_scope/sell.inventory";
+const DEFAULT_SCOPES = [
+  "https://api.ebay.com/oauth/api_scope",
+  "https://api.ebay.com/oauth/api_scope/sell.account",
+  "https://api.ebay.com/oauth/api_scope/sell.inventory",
+  "https://api.ebay.com/oauth/api_scope/sell.stores",
+].join(" ");
+const EBAY_SCOPES = Deno.env.get("EBAY_SCOPES") || DEFAULT_SCOPES;
 
 function b64urlToStr(input: string): string {
   input = input.replace(/-/g, "+").replace(/_/g, "/");
