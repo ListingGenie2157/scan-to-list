@@ -58,7 +58,9 @@ export function EbayPricingModal({ isOpen, onClose, item }: EbayPricingModalProp
     setPricingData(null);
     
     try {
-      const payload: any = {};
+      const payload: any = {
+        condition: "Used"
+      };
       
       if (item.isbn) {
         payload.isbn = item.isbn;
@@ -68,24 +70,49 @@ export function EbayPricingModal({ isOpen, onClose, item }: EbayPricingModalProp
         throw new Error("No ISBN or title available for pricing lookup");
       }
 
-      const { data, error } = await supabase.functions.invoke('ebay-pricing', {
+      const { data, error } = await supabase.functions.invoke('ebay-comps', {
         body: payload
       });
 
       if (error) throw error;
       
-      if (data.analytics?.count === 0) {
+      if (data.count === 0) {
         setError("No sold listings found for this item");
         return;
       }
 
-      setPricingData(data);
+      // Transform the new API response to match the old interface
+      const transformedData: EbayPricingData = {
+        suggestedPrice: data.suggestion.fair,
+        analytics: {
+          count: data.used || 0,
+          median: data.P50 || data.suggestion.fair,
+          average: data.suggestion.fair,
+          min: data.suggestion.fast,
+          max: data.suggestion.max,
+          range: data.suggestion.max - data.suggestion.fast,
+          q1: data.suggestion.fast,
+          q3: data.suggestion.high
+        },
+        items: (data.samples || []).map((price: number, index: number) => ({
+          title: `Sold Item ${index + 1}`,
+          price: price,
+          currency: "USD",
+          condition: "Used",
+          sellingState: "EndedWithSales",
+          itemWebUrl: "#",
+          seller: "Anonymous"
+        })),
+        confidence: data.used >= 10 ? "high" : data.used >= 5 ? "medium" : "low"
+      };
+
+      setPricingData(transformedData);
     } catch (err: any) {
       console.error('eBay pricing error:', err);
       setError(err.message || 'Failed to get eBay pricing data');
       toast({
         title: "Pricing Error",
-        description: "Could not fetch eBay pricing data. Make sure eBay is connected.",
+        description: "Could not fetch eBay pricing data.",
         variant: "destructive"
       });
     } finally {
