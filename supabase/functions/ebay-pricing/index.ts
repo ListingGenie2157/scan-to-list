@@ -93,7 +93,7 @@ serve(async (req) => {
       const body = new URLSearchParams({
         grant_type: "refresh_token",
         refresh_token: token.refresh_token,
-        scope: "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
+        scope: "https://api.ebay.com/oauth/api_scope/sell.inventory",
       });
       const resp = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
         method: "POST",
