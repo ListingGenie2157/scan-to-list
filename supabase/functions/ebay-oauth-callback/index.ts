@@ -85,7 +85,7 @@ serve(async (req) => {
       access_token,
       refresh_token: refresh_token ?? null,
       user_id: userId,
-      scope: "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
+      scope: "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/buy.browse.readonly",
       expires_at,
     }, {
       onConflict: 'user_id,provider'
