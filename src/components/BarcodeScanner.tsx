@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label';
 import { normalizeScan, lookupIsbn, upsertItem, storeCover } from '@/lib/scanning';
 import { useScannerSettings } from '@/hooks/useScannerSettings';
 
+import type { LookupMeta } from '@/lib/scanning';
+
 interface BarcodeScannerProps {
-  onScanSuccess?: (data: any) => void;
+  onScanSuccess?: (data: NonNullable<LookupMeta>) => void;
 }
 
 export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) => {
@@ -28,7 +30,8 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
 
   const beep = () => {
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const ctx = new ((window as unknown as { AudioContext: typeof AudioContext; webkitAudioContext?: typeof AudioContext }).AudioContext
+        || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
       const o = ctx.createOscillator();
       const g = ctx.createGain();
       o.connect(g); g.connect(ctx.destination);
