@@ -89,6 +89,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           publisher,
           year,
           isbn13,
+          suggested_price,
           photos (
             public_url,
             thumb_url
@@ -109,7 +110,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,
             status: it.status ?? 'draft',
             suggested_category: it.type ?? 'book',
-            suggested_price: null,
+            suggested_price: it.suggested_price ?? null,
             suggested_title: null,
             publisher: it.publisher ?? null,
             publication_year: null,

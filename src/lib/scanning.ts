@@ -38,6 +38,12 @@ export function normalizeScan(raw: string): string | null {
     return digits;
   }
 
+  // Accept 12-digit UPC codes (e.g., magazines) by returning the digits as-is. 
+  // Caller can decide how to handle these codes (e.g., treat as product UPC).
+  if (digits.length === 12) {
+    return digits;
+  }
+
   return null;
 }
 
@@ -49,6 +55,8 @@ function isbn10to13(isbn10: string): string {
   return core + check;
 }
 
+// Lookup product information using a barcode (ISBN-13, ISBN-10 converted, UPC, etc.).
+// The parameter name remains `isbn13` for backward compatibility but any numeric code is accepted.
 export async function lookupIsbn(isbn13: string): Promise<LookupMeta> {
   const { data, error } = await supabase.functions.invoke('lookup-product', {
     body: { barcode: isbn13 }
@@ -119,20 +127,52 @@ export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number>
 }
 
 async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<LookupMeta>) {
+  // Attempt to generate a price using multiple strategies. We prefer pulling
+  // real-world pricing data via our eBay proxy function if an ISBN or
+  // reasonable query is available. If that fails, fall back to the
+  // existing OpenAI/heuristic approach. Any failure is swallowed to avoid
+  // blocking the save flow.
   try {
-    const { data, error } = await supabase.functions.invoke('generate-price', {
-      body: {
-        title: meta.title,
-        authors: meta.authors,
-        publisher: meta.publisher,
-        year: meta.year,
-        isbn13: meta.isbn13,
+    let suggestedPrice: number | undefined;
+    // First try eBay pricing if we have an ISBN or at least a title for the query.
+    try {
+      const body: any = {};
+      if (meta.isbn13) body.isbn = meta.isbn13;
+      // If no ISBN but we have a title, fallback to query based search.
+      if (!body.isbn && meta.title) body.query = meta.title;
+      if (Object.keys(body).length > 0) {
+        const { data: pricingData, error: pricingErr } = await supabase.functions.invoke('ebay-pricing', { body });
+        if (!pricingErr) {
+          // The eBay pricing function returns { suggestedPrice: number, analytics: ..., items: ..., confidence: ... }
+          const price = (pricingData as any)?.suggestedPrice as number | undefined;
+          if (typeof price === 'number' && isFinite(price) && price > 0) {
+            suggestedPrice = price;
+          }
+        }
       }
-    });
-    if (error) throw error;
-    const price = (data as any)?.price as number | undefined;
-    if (typeof price === 'number' && isFinite(price)) {
-      await supabase.from('items').update({ suggested_price: price }).eq('id', itemId);
+    } catch (e) {
+      // Swallow errors from eBay pricing to allow fallback to heuristic
+      console.warn('eBay pricing error:', e);
+    }
+    // If we still don't have a price, fall back to OpenAI/heuristic generator
+    if (typeof suggestedPrice !== 'number') {
+      const { data, error } = await supabase.functions.invoke('generate-price', {
+        body: {
+          title: meta.title,
+          authors: meta.authors,
+          publisher: meta.publisher,
+          year: meta.year,
+          isbn13: meta.isbn13,
+        },
+      });
+      if (error) throw error;
+      const price = (data as any)?.price as number | undefined;
+      if (typeof price === 'number' && isFinite(price)) {
+        suggestedPrice = price;
+      }
+    }
+    if (typeof suggestedPrice === 'number' && isFinite(suggestedPrice)) {
+      await supabase.from('items').update({ suggested_price: suggestedPrice }).eq('id', itemId);
     }
   } catch (e) {
     console.warn('Price generation failed:', e);

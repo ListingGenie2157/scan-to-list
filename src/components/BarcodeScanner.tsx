@@ -70,28 +70,40 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
 
   const processBarcode = async (barcodeRaw: string) => {
     try {
-      const isbn13 = normalizeScan(barcodeRaw);
-      if (!isbn13) {
-        toast({ title: 'Invalid code', description: 'Only ISBN-13 (books) are supported.', variant: 'destructive' });
+      const normalized = normalizeScan(barcodeRaw);
+      let codeToUse: string | null = normalized;
+      // If normalization returns null, attempt to treat the raw digits as a UPC/product code
+      if (!normalized) {
+        const rawDigits = String(barcodeRaw).replace(/\D/g, '');
+        if (rawDigits.length === 12) {
+          codeToUse = rawDigits;
+        }
+      }
+      if (!codeToUse) {
+        toast({ title: 'Invalid code', description: 'Unsupported barcode. Please scan a valid ISBN-13 or UPC.', variant: 'destructive' });
         return;
       }
 
-      const meta = await lookupIsbn(isbn13);
-      if (!meta || meta.type !== 'book') {
-        toast({ title: 'Not found', description: 'No book details found for this code.', variant: 'destructive' });
+      // Lookup product info using our Supabase edge function. It will handle books, magazines and generic UPCs.
+      const meta = await lookupIsbn(codeToUse);
+      if (!meta) {
+        toast({ title: 'Not found', description: 'No details found for this code.', variant: 'destructive' });
         return;
       }
+
+      // Determine item type for cover storage (book or magazine) based on meta.type if available
+      const itemType: 'book' | 'magazine' = (meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book';
 
       const itemId = await upsertItem(meta);
       if (mirrorCovers && meta.coverUrl) {
         try {
-          await storeCover(itemId, meta.coverUrl, 'book');
+          await storeCover(itemId, meta.coverUrl, itemType);
         } catch (e) {
           console.warn('Cover mirror failed:', e);
         }
       }
 
-      toast({ title: 'Saved', description: `Saved ${isbn13} – ${meta.title || 'Untitled'}` });
+      toast({ title: 'Saved', description: `Saved ${codeToUse} – ${meta.title || 'Untitled'}` });
       onScanSuccess?.(meta);
     } catch (error) {
       console.error('Barcode processing error:', error);
