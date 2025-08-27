@@ -157,16 +157,18 @@ async function lookupUPCDatabase(barcode: string) {
     if (data.items && data.items.length > 0) {
       const item = data.items[0];
       return {
+        // Mark UPC lookups as generic products. Clients may override to 'magazine' if desired.
+        type: 'product',
         title: item.title,
-        author: null,
+        authors: null,
         publisher: item.brand,
         publication_year: null,
         isbn: null,
         description: item.description,
-        category: item.category,
+        categories: item.category ? [item.category] : null,
         format: 'Magazine/Product',
         genre: item.category,
-        suggested_price: null
+        suggested_price: null,
       };
     }
   } catch (error) {
