@@ -39,9 +39,12 @@ serve(async (req) => {
       if (!productInfo) {
         productInfo = await lookupOpenLibrary(codeToUse);
       }
+    } else if (norm.kind === 'UPCA' || norm.kind === 'UNKNOWN') {
+      // For UPC-A or unknown codes, attempt a basic UPC database lookup.
+      // This handles magazines and generic products where only a UPC is available.
+      productInfo = await lookupUPCDatabase(codeToUse);
     } else {
-      // For UPCA or UNKNOWN we skip product database lookups
-      // and allow the client to fall back to OCR/manual entry
+      // fallback: let client handle via OCR/manual entry
     }
 
     // Read-only: no database writes performed here.
