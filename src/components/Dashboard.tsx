@@ -76,8 +76,14 @@ export const Dashboard = () => {
     
     try {
       // Test the eBay pricing function with improved error reporting
+      // Include auth header even though verify_jwt is false, just in case
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const { data, error } = await supabase.functions.invoke('ebay-pricing', {
-        body: { query: 'test book' }
+        body: { query: 'test book' },
+        headers: session?.access_token ? {
+          Authorization: `Bearer ${session.access_token}`
+        } : {}
       });
 
       if (error) {
