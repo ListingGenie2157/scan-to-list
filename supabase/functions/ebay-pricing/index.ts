@@ -35,8 +35,17 @@ serve(async (req) => {
     }
 
     // PRODUCTION app token for Browse API
-    const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!;
-    const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET")!;
+    const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID");
+    const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET");
+    
+    // Better error reporting for missing credentials
+    if (!EBAY_CLIENT_ID) {
+      return json({ error: "EBAY_CLIENT_ID environment variable not set" }, 400);
+    }
+    if (!EBAY_CLIENT_SECRET) {
+      return json({ error: "EBAY_CLIENT_SECRET environment variable not set" }, 400);
+    }
+    
     const auth = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
 
     const tokRes = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
@@ -53,7 +62,8 @@ serve(async (req) => {
 
     const tok = await tokRes.json();
     if (!tok.access_token) {
-      throw new Error(`No app token: ${tokRes.status} ${JSON.stringify(tok)}`);
+      const errorMsg = tok.error_description || tok.error || `HTTP ${tokRes.status}`;
+      return json({ error: `eBay authentication failed: ${errorMsg}` }, 401);
     }
     const APP_TOKEN = tok.access_token;
 

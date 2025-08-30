@@ -75,27 +75,21 @@ export const Dashboard = () => {
     setEbayStatus(prev => ({ ...prev, testing: true, error: null }));
     
     try {
-      // Test the eBay diagnostic function first
-      const { data, error } = await supabase.functions.invoke('test-ebay');
+      // Test the eBay pricing function with improved error reporting
+      const { data, error } = await supabase.functions.invoke('ebay-pricing', {
+        body: { query: 'test book' }
+      });
 
       if (error) {
         throw new Error(error.message);
       }
 
-      const diagnostics = data?.diagnostics;
-      if (diagnostics) {
-        if (!diagnostics.hasClientId || !diagnostics.hasClientSecret) {
-          throw new Error('eBay credentials not set in Supabase environment');
-        }
-        
-        if (diagnostics.ebayTokenTest?.error) {
-          throw new Error(`eBay API: ${diagnostics.ebayTokenTest.error}`);
-        }
-        
-        if (!diagnostics.ebayTokenTest?.ok) {
-          throw new Error(`eBay auth failed: ${diagnostics.ebayTokenTest?.status}`);
-        }
+      if (data?.error) {
+        // Now we get specific error messages from the function
+        throw new Error(data.error);
+      }
 
+      if (data && (data.suggestedPrice !== undefined || data.analytics)) {
         setEbayStatus({
           connected: true,
           testing: false,
@@ -105,10 +99,10 @@ export const Dashboard = () => {
         
         toast({
           title: "eBay Connection Working!",
-          description: `Credentials valid. Token: ${diagnostics.ebayTokenTest?.hasAccessToken ? 'OK' : 'Failed'}`,
+          description: "eBay API credentials are configured and working.",
         });
       } else {
-        throw new Error('No diagnostic data returned');
+        throw new Error('Unexpected response from eBay function');
       }
     } catch (error) {
       setEbayStatus({
