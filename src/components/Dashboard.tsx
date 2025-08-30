@@ -120,7 +120,7 @@ export const Dashboard = () => {
     if (activeTab === "overview") {
       testEbayConnection();
     }
-  }, [activeTab]);
+  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mock data for demonstration
   const stats = {
