@@ -11,6 +11,7 @@ interface BatchSettings {
   defaultCondition: string;
   autoGenerateTitle: boolean;
   autoGeneratePrice: boolean;
+  skipPricing: boolean;
 }
 
 interface BatchSettingsModalProps {
@@ -130,6 +131,20 @@ export function BatchSettingsModal({ isOpen, onClose, onSettingsChange, currentS
                   onClick={() => updateSetting('autoGeneratePrice', !settings.autoGeneratePrice)}
                 >
                   {settings.autoGeneratePrice ? "ON" : "OFF"}
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">Skip pricing entirely</Label>
+                  <p className="text-xs text-muted-foreground">Skip eBay pricing API calls (faster processing)</p>
+                </div>
+                <Button
+                  variant={settings.skipPricing ? "destructive" : "outline"}
+                  size="sm"
+                  onClick={() => updateSetting('skipPricing', !settings.skipPricing)}
+                >
+                  {settings.skipPricing ? "SKIP" : "OFF"}
                 </Button>
               </div>
             </CardContent>

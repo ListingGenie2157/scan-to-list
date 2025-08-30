@@ -16,6 +16,7 @@ interface BatchSettings {
   defaultCondition: string;
   autoGenerateTitle: boolean;
   autoGeneratePrice: boolean;
+  skipPricing: boolean;
 }
 
 interface UploadModalProps {
@@ -36,7 +37,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
     defaultCategory: "auto",
     defaultCondition: "auto", 
     autoGenerateTitle: true,
-    autoGeneratePrice: true
+    autoGeneratePrice: true,
+    skipPricing: false
   });
   const [barcode, setBarcode] = useState('');
   const [showScan, setShowScan] = useState(false);

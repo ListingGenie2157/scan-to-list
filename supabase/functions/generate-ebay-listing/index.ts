@@ -69,7 +69,7 @@ Please generate:
    - Appeals to collectors and enthusiasts
    - Mentions shipping and return policy basics
 
-Format your response as JSON with "title" and "description" fields.`;
+Format your response as JSON with "title" and "description" fields. Do not include pricing in your response as that will be calculated separately.`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -110,6 +110,12 @@ Format your response as JSON with "title" and "description" fields.`;
       };
     }
 
+    // Generate market-based pricing using ebay-pricing function
+    const marketPrice = await getMarketBasedPricing(itemData);
+    if (marketPrice) {
+      optimizedListing.price = marketPrice;
+    }
+
     return new Response(JSON.stringify({ 
       success: true,
       optimizedListing
@@ -128,3 +134,89 @@ Format your response as JSON with "title" and "description" fields.`;
     });
   }
 });
+
+// Function to get market-based pricing using the ebay-pricing edge function
+async function getMarketBasedPricing(itemData: any): Promise<number | null> {
+  const { title, author, isbn } = itemData;
+  
+  try {
+    // Create search query for eBay pricing function
+    let searchQuery = '';
+    if (isbn) {
+      searchQuery = isbn;
+    } else if (title && author) {
+      searchQuery = `${title} ${author}`.trim();
+    } else if (title) {
+      searchQuery = title;
+    } else {
+      console.log('No search data available for pricing');
+      return null;
+    }
+
+    // Call the ebay-pricing edge function
+    const base = Deno.env.get("SUPABASE_URL")!.replace(".supabase.co", ".functions.supabase.co");
+    const pricingUrl = `${base}/ebay-pricing`;
+    
+    const response = await fetch(pricingUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        isbn: isbn || undefined,
+        query: !isbn ? searchQuery : undefined
+      })
+    });
+
+    if (!response.ok) {
+      console.error('eBay pricing function error:', response.status, response.statusText);
+      return null;
+    }
+
+    const pricingData = await response.json();
+    
+    if (pricingData.success && pricingData.suggestedPrice) {
+      console.log('Got pricing from eBay:', pricingData.suggestedPrice);
+      return pricingData.suggestedPrice;
+    } else {
+      console.log('No pricing data returned from eBay function');
+      return null;
+    }
+    
+  } catch (error) {
+    console.error('Error calling eBay pricing function:', error);
+    return null;
+  }
+}
+
+// Fallback pricing function
+function calculateFallbackPrice(itemData: any): number {
+  const { condition, category, publication_year } = itemData;
+  const isMagazine = category?.toLowerCase().includes('magazine');
+  
+  let basePrice = isMagazine ? 8.0 : 15.0;
+  
+  // Condition multipliers
+  const conditionMultiplier = {
+    'new': 1.5,
+    'like-new': 1.3,
+    'good': 1.0,
+    'fair': 0.7,
+    'poor': 0.5
+  };
+  
+  basePrice *= conditionMultiplier[condition] || 1.0;
+  
+  // Age adjustment for books
+  if (!isMagazine && publication_year) {
+    const currentYear = new Date().getFullYear();
+    const age = currentYear - publication_year;
+    if (age > 20) {
+      basePrice *= 1.2; // Vintage books may be worth more
+    }
+  }
+  
+  return Math.round(basePrice * 100) / 100;
+}
+
+// Removed old eBay API functions - now using ebay-pricing edge function

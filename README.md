@@ -1,73 +1,30 @@
-# Welcome to your Lovable project
+# AI Inference in Supabase Edge Functions
 
-## Project info
+Since Supabase Edge Runtime [v1.36.0](https://github.com/supabase/edge-runtime/releases/tag/v1.36.0) you can run the [`gte-small` model](https://huggingface.co/Supabase/gte-small) natively within Supabase Edge Functions without any external dependencies! This allows you to easily generate text embeddings without calling any external APIs!
 
-**URL**: https://lovable.dev/projects/8df2d048-f9db-4afe-90c6-9827cababee3
+## Semantic Search with pgvector and Supabase Edge Functions
 
-## How can I edit this code?
+This demo consists of three parts:
 
-There are several ways of editing your application.
+1. A [`generate-embedding`](./supabase/functions/generate-embedding/index.ts) database webhook edge function which generates embeddings when a content row is added (or updated) in the [`public.embeddings`](./supabase/migrations/20240408072601_embeddings.sql) table.
+2. A [`query_embeddings` Postgres function](./supabase/migrations/20240410031515_vector-search.sql) which allows us to perform similarity search from an egde function via [Remote Procedure Call (RPC)](https://supabase.com/docs/guides/database/functions?language=js).
+3. A [`search` edge function](./supabase/functions/search/index.ts) which generates the embedding for the search term, performs the similarity search via RPC function call, and returns the result.
 
-**Use Lovable**
+## Deploy
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/8df2d048-f9db-4afe-90c6-9827cababee3) and start prompting.
+- Link your project: `supabase link`
+- Deploy Edge Functions: `supabase functions deploy`
+- Update project config to [enable webhooks](https://supabase.com/docs/guides/local-development/cli/config#experimental.webhooks.enabled): `supabase config push`
+- Navigate to the [database-webhook](./supabase/migrations/20240410041607_database-webhook.sql) migration file and insert your `generate-embedding` function details.
+- Push up the database schema `supabase db push`
 
-Changes made via Lovable will be committed automatically to this repo.
+## Run
 
-**Use your preferred IDE**
+Run a search via curl POST request:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```bash
+curl -i --location --request POST 'https://<PROJECT-REF>.supabase.co/functions/v1/search' \
+    --header 'Authorization: Bearer <SUPABASE_ANON_KEY>' \
+    --header 'Content-Type: application/json' \
+    --data '{"search":"vehicles"}'
 ```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/8df2d048-f9db-4afe-90c6-9827cababee3) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
