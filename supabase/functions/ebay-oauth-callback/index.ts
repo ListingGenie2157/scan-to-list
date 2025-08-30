@@ -11,6 +11,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!;
 const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET")!;
 const EBAY_REDIRECT_RUNAME = Deno.env.get("EBAY_REDIRECT_RUNAME")!;
+const EBAY_SCOPES = Deno.env.get("EBAY_SCOPES") || "https://api.ebay.com/oauth/api_scope https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account.readonly";
 
 function b64urlToStr(input: string) {
   input = input.replace(/-/g, "+").replace(/_/g, "/");
@@ -85,7 +86,7 @@ serve(async (req) => {
       access_token,
       refresh_token: refresh_token ?? null,
       user_id: userId,
-      scope: "https://api.ebay.com/oauth/api_scope/sell.inventory",
+      scope: EBAY_SCOPES,
       expires_at,
     }, {
       onConflict: 'user_id,provider'
