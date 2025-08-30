@@ -22,17 +22,32 @@ serve(async (req) => {
     let requestData;
     try {
       requestData = await req.json();
+      console.log('📨 Raw request data:', JSON.stringify(requestData, null, 2));
     } catch (parseError) {
       console.error('❌ JSON parsing error:', parseError);
-      throw new Error('Invalid JSON in request body');
+      return new Response(JSON.stringify({ 
+        error: 'Invalid JSON in request body',
+        success: false,
+        parseError: parseError.message
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
     
     const { photoId, imageUrl } = requestData;
     console.log('📋 Request data:', { photoId, imageUrl });
 
     if (!photoId || !imageUrl) {
-      console.error('❌ Missing required fields');
-      throw new Error('Photo ID and image URL are required');
+      console.error('❌ Missing required fields', { photoId: !!photoId, imageUrl: !!imageUrl });
+      return new Response(JSON.stringify({ 
+        error: 'Photo ID and image URL are required',
+        success: false,
+        received: { hasPhotoId: !!photoId, hasImageUrl: !!imageUrl }
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     if (!openAIApiKey) {
