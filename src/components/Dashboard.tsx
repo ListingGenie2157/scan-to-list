@@ -72,12 +72,15 @@ export const Dashboard = () => {
   };
 
   const testEbayConnection = async () => {
+    if (!user) return; // Don't test if no user
+    
     setEbayStatus(prev => ({ ...prev, testing: true, error: null }));
     
     try {
       // Test the eBay pricing function with improved error reporting
       // Include auth header even though verify_jwt is false, just in case
-      const { data: { session } } = await supabase.auth.getSession();
+      const { data: sessionData } = await supabase.auth.getSession();
+      const session = sessionData?.session;
       
       const { data, error } = await supabase.functions.invoke('ebay-pricing', {
         body: { query: 'test book' },
@@ -129,7 +132,10 @@ export const Dashboard = () => {
   // Test eBay connection on component mount
   useEffect(() => {
     if (activeTab === "overview") {
-      testEbayConnection();
+      // Add small delay to avoid hydration issues
+      setTimeout(() => {
+        testEbayConnection();
+      }, 100);
     }
   }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
 
