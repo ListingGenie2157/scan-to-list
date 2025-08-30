@@ -45,39 +45,25 @@ serve(async (req) => {
       return json({ error: "EBAY_CLIENT_SECRET environment variable not set" }, 400);
     }
 
-    // Get eBay app token
-    const auth = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
+    // Since eBay no longer allows access to sold data, we'll use algorithmic pricing
+    console.log("Using algorithmic pricing (eBay sold data no longer available)");
     
-    const tokenResponse = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": `Basic ${auth}`
-      },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        scope: "https://api.ebay.com/oauth/api_scope/buy.browse"
-      }).toString()
-    });
-
-    const tokenData = await tokenResponse.json();
-    if (!tokenData.access_token) {
-      const errorMsg = tokenData.error_description || tokenData.error || `HTTP ${tokenResponse.status}`;
-      return json({ error: `eBay authentication failed: ${errorMsg}` }, 401);
-    }
-
-    console.log("eBay token obtained successfully");
+    // Calculate price based on item data using your existing algorithm
+    const suggestedPrice = calculateFallbackPrice(isbn, query);
     
-    // For now, return a simple success response for testing
+    console.log("Algorithmic pricing calculated:", suggestedPrice);
+    
     return json({
       success: true,
-      message: "eBay connection test successful",
-      suggestedPrice: 15.00,
+      message: "Price calculated using algorithmic method (eBay sold data unavailable)", 
+      suggestedPrice: suggestedPrice,
       analytics: {
         count: 1,
-        median: 15.00,
-        average: 15.00,
-        confidence: "medium"
+        median: suggestedPrice,
+        average: suggestedPrice,
+        min: suggestedPrice * 0.8,
+        max: suggestedPrice * 1.2,
+        confidence: "algorithmic"
       },
       items: []
     });
@@ -87,3 +73,51 @@ serve(async (req) => {
     return json({ error: String(e) }, 500);
   }
 });
+
+// Algorithmic pricing function since eBay sold data is no longer available
+function calculateFallbackPrice(isbn?: string, query?: string): number {
+  let basePrice = 15.0; // Default book price
+  
+  // If it looks like a magazine query, lower the base price
+  if (query?.toLowerCase().includes('magazine') || 
+      query?.toLowerCase().includes('issue') ||
+      query?.toLowerCase().includes('vol')) {
+    basePrice = 8.0;
+  }
+  
+  // If it has ISBN, it's likely a book
+  if (isbn) {
+    basePrice = 15.0;
+    
+    // Newer ISBNs (978-) might be worth slightly more
+    if (isbn.startsWith('978')) {
+      basePrice *= 1.1;
+    }
+  }
+  
+  // Add some variation based on query characteristics
+  if (query) {
+    const queryLower = query.toLowerCase();
+    
+    // Vintage indicators
+    if (queryLower.includes('vintage') || queryLower.includes('antique') || 
+        queryLower.includes('rare') || queryLower.includes('first edition')) {
+      basePrice *= 1.5;
+    }
+    
+    // Collectible indicators  
+    if (queryLower.includes('collectible') || queryLower.includes('limited') ||
+        queryLower.includes('signed')) {
+      basePrice *= 1.3;
+    }
+    
+    // Series/set indicators
+    if (queryLower.includes('set') || queryLower.includes('series') ||
+        queryLower.includes('collection')) {
+      basePrice *= 1.2;
+    }
+  }
+  
+  // Round to 2 decimal places and ensure minimum price
+  return Math.max(5.0, Math.round(basePrice * 100) / 100);
+}
