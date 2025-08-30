@@ -58,17 +58,42 @@ export function BulkListingModal({ selectedItems, isOpen, onClose }: BulkListing
   const fetchItemDetails = async () => {
     try {
       const { data, error } = await supabase
-        .from('inventory_items')
+        .from('items')
         .select(`
-          id, title, author, status, suggested_category, suggested_price,
-          suggested_title, publisher, publication_year, condition_assessment,
-          genre, isbn, issue_number, issue_date, created_at, confidence_score,
+          id,
+          title,
+          authors,
+          status,
+          type,
+          publisher,
+          year,
+          isbn13,
+          created_at,
           photos (public_url)
         `)
-        .in('id', selectedItems);
+        .in('id', selectedItems.map((id) => Number(id)));
 
       if (error) throw error;
-      setItems(data || []);
+      const mapped: InventoryItem[] = (data || []).map((it: any) => ({
+        id: String(it.id),
+        title: it.title ?? null,
+        author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,
+        status: it.status ?? 'draft',
+        suggested_category: it.type ?? 'book',
+        suggested_price: null,
+        suggested_title: null,
+        publisher: it.publisher ?? null,
+        publication_year: it.year ? Number(it.year) || null : null,
+        condition_assessment: null,
+        genre: null,
+        isbn: it.isbn13 ?? null,
+        issue_number: null,
+        issue_date: null,
+        created_at: it.created_at,
+        photos: Array.isArray(it.photos) ? it.photos[0] || null : it.photos || null,
+        confidence_score: null,
+      }));
+      setItems(mapped);
       setSelectedForProcessing(selectedItems);
     } catch (error) {
       console.error('Error fetching items:', error);

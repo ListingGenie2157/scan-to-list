@@ -17,7 +17,6 @@ interface BulkEditModalProps {
 }
 
 interface BulkUpdateData {
-  condition?: string;
   category?: string;
   status?: string;
 }
@@ -41,14 +40,13 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
     try {
       // Build the update object with only selected fields
       const updates: any = {};
-      if (updateData.condition) updates.condition_assessment = updateData.condition;
-      if (updateData.category) updates.suggested_category = updateData.category;
+      if (updateData.category) updates.type = updateData.category;
       if (updateData.status) updates.status = updateData.status;
 
       const { error } = await supabase
-        .from('inventory_items')
+        .from('items')
         .update(updates)
-        .in('id', selectedItems);
+        .in('id', selectedItems.map((id) => Number(id)));
 
       if (error) {
         throw error;
@@ -107,36 +105,6 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
             <CardContent className="pt-4 space-y-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>Condition</Label>
-                  {updateData.condition && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => clearField('condition')}
-                    >
-                      <X className="w-3 h-3" />
-                    </Button>
-                  )}
-                </div>
-                <Select 
-                  value={updateData.condition || ""} 
-                  onValueChange={(value) => setUpdateData(prev => ({ ...prev, condition: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Keep current condition" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="new">New</SelectItem>
-                    <SelectItem value="like-new">Like New</SelectItem>
-                    <SelectItem value="good">Good</SelectItem>
-                    <SelectItem value="fair">Fair</SelectItem>
-                    <SelectItem value="poor">Poor</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
                   <Label>Category</Label>
                   {updateData.category && (
                     <Button
@@ -184,7 +152,7 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
                     <SelectValue placeholder="Keep current status" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="draft">Draft</SelectItem>
                     <SelectItem value="processed">Processed</SelectItem>
                     <SelectItem value="listed">Listed</SelectItem>
                     <SelectItem value="sold">Sold</SelectItem>
@@ -198,9 +166,6 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
             <div className="p-3 bg-primary/5 rounded-lg">
               <p className="text-sm font-medium text-primary">Changes to apply:</p>
               <div className="mt-1 space-y-1">
-                {updateData.condition && (
-                  <p className="text-xs">• Condition → {updateData.condition}</p>
-                )}
                 {updateData.category && (
                   <p className="text-xs">• Category → {updateData.category}</p>
                 )}

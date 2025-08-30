@@ -10,9 +10,12 @@ import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
 import { EbayAuthModal } from "./EbayAuthModal";
+import { ConnectEbayButton } from "./ConnectEbayButton";
+import { Navigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
 export const Dashboard = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, loading } = useAuth();
   const { toast } = useToast();
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [autoOpenScanner, setAutoOpenScanner] = useState(false);
@@ -31,6 +34,33 @@ export const Dashboard = () => {
     error: null
   });
   const inventoryGridRef = useRef<{ refreshInventory: () => void }>(null);
+
+  // Check for eBay connection success
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('ebay') === 'connected') {
+      toast({
+        title: "eBay Connected Successfully!",
+        description: "Your eBay account is now connected and ready for listing.",
+      });
+      // Clean up the URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [toast]);
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Redirect to auth if not authenticated
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
 
   const handleUploadSuccess = () => {
     // Switch to inventory tab and refresh the data
@@ -158,18 +188,6 @@ export const Dashboard = () => {
               >
                 <Upload className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline ml-2">Upload Photos</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  setAutoOpenScanner(true);
-                  setShowUploadModal(true);
-                }}
-                className="shadow-elevated"
-              >
-                <Camera className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline ml-2">Scan Barcode</span>
               </Button>
               
               {/* User menu - simplified for mobile */}
@@ -373,7 +391,19 @@ export const Dashboard = () => {
                 <CardDescription>Get started with your daily workflow</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Button 
+                    variant="upload" 
+                    size="lg" 
+                    onClick={() => {
+                      setAutoOpenScanner(true);
+                      setShowUploadModal(true);
+                    }}
+                    className="h-20 flex-col"
+                  >
+                    <Camera className="w-6 h-6 mb-2" />
+                    Scan Barcode
+                  </Button>
                   <Button 
                     variant="gradient" 
                     size="lg" 
@@ -407,6 +437,8 @@ export const Dashboard = () => {
                     <Package className="w-6 h-6 mb-2" />
                     Connect eBay
                   </Button>
+                  {/* eBay Connect */}
+                  <ConnectEbayButton />
                 </div>
               </CardContent>
             </Card>
@@ -460,6 +492,7 @@ export const Dashboard = () => {
           <InventoryGrid ref={inventoryGridRef} />
         )}
       </div>
+
 
       <UploadModal 
         open={showUploadModal} 

@@ -5,20 +5,22 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Filter, Package, Clock, CheckCircle, DollarSign, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download } from "lucide-react";
+import { Search, Filter, Package, Clock, CheckCircle, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2, Plus, DollarSign } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/components/ui/use-toast";
 import { CreateListingModal } from "@/components/CreateListingModal";
 import { BulkListingModal } from "@/components/BulkListingModal";
 import { BulkEditModal } from "@/components/BulkEditModal";
+import { EbayPricingModal } from "@/components/EbayPricingModal";
 
 interface InventoryItem {
   id: string;
   title: string | null;
   author: string | null;
   status: string;
-  suggested_category: string | null;
-  suggested_price: number | null;
+  suggested_category: string | null; // mapped from items.type
+  suggested_price: number | null; // not used with items
   suggested_title: string | null;
   publisher: string | null;
   publication_year: number | null;
@@ -30,8 +32,13 @@ interface InventoryItem {
   created_at: string;
   photos: {
     public_url: string | null;
+    thumb_url?: string | null;
   } | null;
   confidence_score: number | null;
+  // extras from items
+  type?: string | null;
+  quantity?: number | null;
+  last_scanned_at?: string | null;
 }
 
 export interface InventoryGridRef {
@@ -52,6 +59,9 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [isBulkListingModalOpen, setIsBulkListingModalOpen] = useState(false);
   const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
+  const [pricingItem, setPricingItem] = useState<InventoryItem | null>(null);
+  const { toast } = useToast();
 
   useImperativeHandle(ref, () => ({
     refreshInventory: fetchInventory
@@ -66,35 +76,59 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const fetchInventory = async () => {
     try {
       const { data, error } = await supabase
-        .from('inventory_items')
+        .from('items')
         .select(`
           id,
           title,
-          author,
+          authors,
           status,
-          suggested_category,
-          suggested_price,
-          suggested_title,
-          publisher,
-          publication_year,
-          condition_assessment,
-          genre,
-          isbn,
-          issue_number,
-          issue_date,
+          type,
+          quantity,
+          last_scanned_at,
           created_at,
-          confidence_score,
+          publisher,
+          year,
+          isbn13,
+          suggested_price,
           photos (
-            public_url
+            public_url,
+            thumb_url
           )
         `)
         .eq('user_id', user?.id)
+        .in('status', ['draft','processed'])
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching inventory:', error);
       } else {
-        setInventory(data || []);
+        const mapped = (data || []).map((it: any) => {
+          const firstPhoto = Array.isArray(it.photos) ? it.photos[0] : null;
+          return {
+            id: String(it.id),
+            title: it.title ?? null,
+            author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,
+            status: it.status ?? 'draft',
+            suggested_category: it.type ?? 'book',
+            suggested_price: it.suggested_price ?? null,
+            suggested_title: null,
+            publisher: it.publisher ?? null,
+            publication_year: null,
+            condition_assessment: null,
+            genre: null,
+            isbn: it.isbn13 ?? null,
+            issue_number: null,
+            issue_date: null,
+            created_at: it.created_at,
+            confidence_score: null,
+            photos: firstPhoto,
+            // extra fields
+            type: it.type ?? 'book',
+            quantity: it.quantity ?? 1,
+            last_scanned_at: it.last_scanned_at ?? null,
+          } as any;
+        });
+        setInventory(mapped);
       }
     } catch (error) {
       console.error('Error fetching inventory:', error);
@@ -118,21 +152,21 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
     switch (status) {
       case "processed": return <CheckCircle className="w-4 h-4 text-success" />;
       case "listed": return <Package className="w-4 h-4 text-primary" />;
-      case "sold": return <DollarSign className="w-4 h-4 text-success" />;
+      case "sold": return <CheckCircle className="w-4 h-4 text-success" />;
       default: return <Clock className="w-4 h-4 text-warning" />;
     }
   };
 
   const getStatusBadge = (status: string) => {
-    const variants = {
+    const variants: Record<string, string> = {
+      draft: "bg-warning/10 text-warning border-warning/20",
       processed: "bg-success/10 text-success border-success/20",
       listed: "bg-primary/10 text-primary border-primary/20",
       sold: "bg-success/10 text-success border-success/20",
-      pending: "bg-warning/10 text-warning border-warning/20"
     };
-    
+    const cls = variants[status] || "bg-muted text-muted-foreground border-muted";
     return (
-      <Badge variant="outline" className={variants[status as keyof typeof variants]}>
+      <Badge variant="outline" className={cls}>
         {status}
       </Badge>
     );
@@ -186,7 +220,6 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       if (error) throw error;
 
       if (data?.download_url) {
-        // Create a temporary link to download the file
         const link = document.createElement('a');
         link.href = data.download_url;
         link.download = data.file_name;
@@ -200,6 +233,99 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       setIsExporting(false);
     }
   };
+
+  const deleteSelected = async () => {
+    if (selectedItems.length === 0) return;
+    if (!confirm(`Delete ${selectedItems.length} item(s)? This removes photos too.`)) return;
+
+    try {
+      const { error } = await supabase.functions.invoke('delete-items', {
+        body: { item_ids: selectedItems, hard: true }
+      });
+      if (error) throw error;
+      setInventory(items => items.filter(it => !selectedItems.includes(it.id)));
+      setSelectedItems([]);
+    } catch (err) {
+      console.error('Bulk delete failed', err);
+    }
+  };
+
+  const handleGetPricing = (item: InventoryItem) => {
+    setPricingItem(item);
+    setIsPricingModalOpen(true);
+  };
+
+  const handleAddPhoto = async (itemId: string) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    (input as any).capture = 'environment';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file || !user?.id) return;
+      try {
+        const basePath = `${user.id}/items/${itemId}`;
+        const fileName = `photo-${Date.now()}.jpg`;
+        const thumbBlob = await createThumbnail(file, 320);
+
+        const { error: upErr } = await supabase.storage.from('photos').upload(`${basePath}/${fileName}`, file, {
+          upsert: true, cacheControl: '3600', contentType: file.type || 'image/jpeg'
+        });
+        if (upErr) throw upErr;
+        const thumbPath = `${basePath}/${fileName.replace('.jpg','')}-thumb.webp`;
+        const { error: upThumbErr } = await supabase.storage.from('photos').upload(thumbPath, thumbBlob, {
+          upsert: true, cacheControl: '3600', contentType: 'image/webp'
+        });
+        if (upThumbErr) throw upThumbErr;
+
+        const { data: pub1 } = supabase.storage.from('photos').getPublicUrl(`${basePath}/${fileName}`);
+        const { data: pub2 } = supabase.storage.from('photos').getPublicUrl(thumbPath);
+
+        await supabase.from('photos').insert({
+          item_id: Number(itemId),
+          file_name: fileName,
+          storage_path: `${basePath}/${fileName}`,
+          public_url: pub1.publicUrl,
+          url_public: pub1.publicUrl,
+          thumb_url: pub2.publicUrl,
+        });
+
+        toast({ title: 'Photo added', description: 'Your photo was uploaded.' });
+        fetchInventory();
+      } catch (e) {
+        console.error(e);
+        toast({ title: 'Upload failed', variant: 'destructive', description: 'Could not add photo.' });
+      }
+    };
+    input.click();
+  };
+
+  async function createThumbnail(file: Blob, maxSize: number): Promise<Blob> {
+    const img = await blobToImage(file);
+    const [w, h] = fitWithin(img.naturalWidth, img.naturalHeight, maxSize);
+    const canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('No canvas context');
+    ctx.drawImage(img, 0, 0, w, h);
+    const blob: Blob = await new Promise((resolve) => canvas.toBlob((b) => resolve(b as Blob), 'image/webp', 0.86));
+    return blob;
+  }
+
+  function fitWithin(w: number, h: number, max: number): [number, number] {
+    const ratio = Math.min(max / w, max / h, 1);
+    return [Math.round(w * ratio), Math.round(h * ratio)];
+  }
+
+  function blobToImage(blob: Blob): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
+      img.src = url;
+    });
+  }
 
   const renderItemCard = (item: InventoryItem) => {
     const isSelected = selectedItems.includes(item.id);
@@ -237,9 +363,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   {item.title || item.suggested_category || 'Untitled'}
                 </h3>
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sm">
-                    ${item.suggested_price?.toFixed(2) || '0.00'}
-                  </span>
+                  <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
                   {getStatusIcon(item.status)}
                 </div>
               </div>
@@ -304,11 +428,9 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 </p>
                 
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-lg">
-                    ${item.suggested_price?.toFixed(2) || '0.00'}
-                  </span>
+                  <span className="font-semibold text-sm">Qty: {item.quantity ?? 1}</span>
                   <span className="text-xs text-muted-foreground">
-                    {item.confidence_score || 0}% confidence
+                    {item.last_scanned_at ? `Scanned ${new Date(item.last_scanned_at).toLocaleDateString()}` : ''}
                   </span>
                 </div>
               </div>
@@ -345,7 +467,14 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
     // Default grid view
     return (
-      <Card key={item.id} className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}>
+      <Card 
+        key={item.id} 
+        className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
+        onClick={() => {
+          setSelectedItem(item);
+          setIsCreateListingModalOpen(true);
+        }}
+      >
         <CardContent className="p-4">
           <div className="space-y-3">
             {/* Selection Checkbox */}
@@ -353,6 +482,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               <Checkbox
                 checked={isSelected}
                 onCheckedChange={() => toggleItemSelection(item.id)}
+                onClick={(e) => e.stopPropagation()}
               />
             </div>
             
@@ -383,9 +513,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               </p>
               
               <div className="flex items-center justify-between">
-                <span className="font-semibold text-lg">
-                  ${item.suggested_price?.toFixed(2) || '0.00'}
-                </span>
+                <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
                 <div className="flex items-center gap-1">
                   {getStatusIcon(item.status)}
                   {getStatusBadge(item.status)}
@@ -394,36 +522,58 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
               <div className="flex items-center justify-between text-xs text-muted-foreground">
                 <span>Added {new Date(item.created_at).toLocaleDateString()}</span>
-                <span className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-success rounded-full" />
-                  {item.confidence_score || 0}% confidence
-                </span>
+                <span>{item.last_scanned_at ? `Scanned ${new Date(item.last_scanned_at).toLocaleDateString()}` : ''}</span>
               </div>
             </div>
 
             {/* Actions */}
-            <div className="flex gap-2 pt-2">
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="flex-1"
-                onClick={() => {
-                  // TODO: Implement edit functionality
-                }}
-              >
-                Edit
-              </Button>
-              <Button 
-                variant="default" 
-                size="sm" 
-                className="flex-1"
-                onClick={() => {
-                  setSelectedItem(item);
-                  setIsCreateListingModalOpen(true);
-                }}
-              >
-                Create Listing
-              </Button>
+            <div className="space-y-2 pt-2">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1 min-w-0"
+                  onClick={(e) => { e.stopPropagation(); /* TODO: Implement edit */ }}
+                >
+                  Edit
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1 min-w-0 text-xs sm:text-sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddPhoto(item.id);
+                  }}
+                >
+                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Add Photo
+                </Button>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGetPricing(item);
+                  }}
+                >
+                  <DollarSign className="w-4 h-4 mr-1" /> eBay Pricing
+                </Button>
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  className="flex-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedItem(item);
+                    setIsCreateListingModalOpen(true);
+                  }}
+                >
+                  Create Listing
+                </Button>
+              </div>
             </div>
           </div>
         </CardContent>
@@ -456,7 +606,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="processed">Processed</SelectItem>
                   <SelectItem value="listed">Listed</SelectItem>
                   <SelectItem value="sold">Sold</SelectItem>
@@ -529,37 +679,48 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       </Card>
 
       {/* Action Buttons */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {selectedItems.length > 0 && (
           <>
             <Button 
               variant="outline" 
               size="sm"
-              onClick={() => setIsBulkEditModalOpen(true)}
+              onClick={handleExportCSV}
+              disabled={isExporting}
+              className="w-full sm:w-auto"
             >
-              <Edit3 className="w-4 h-4 mr-2" />
-              Bulk Edit ({selectedItems.length})
+              <Download className="w-4 h-4 mr-2" />
+              {isExporting ? 'Exporting...' : `Export CSV (${selectedItems.length})`}
             </Button>
             <Button 
               variant="outline" 
               size="sm"
               onClick={() => setIsBulkListingModalOpen(true)}
+              className="w-full sm:w-auto"
             >
               Bulk Create Listings ({selectedItems.length})
             </Button>
             <Button 
               variant="outline" 
               size="sm"
-              onClick={handleExportCSV}
-              disabled={isExporting}
+              onClick={() => setIsBulkEditModalOpen(true)}
+              className="w-full sm:w-auto"
             >
-              <Download className="w-4 h-4 mr-2" />
-              {isExporting ? 'Exporting...' : `Export CSV (${selectedItems.length})`}
+              <Edit3 className="w-4 h-4 mr-2" />
+              Bulk Edit ({selectedItems.length})
+            </Button>
+            <Button 
+              variant="destructive" 
+              size="sm"
+              onClick={deleteSelected}
+              className="w-full sm:w-auto"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete ({selectedItems.length})
             </Button>
           </>
         )}
       </div>
-
       {/* Inventory Grid */}
       {loading ? (
         <div className={getGridColumns()}>
@@ -628,6 +789,15 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           fetchInventory();
           setSelectedItems([]);
         }}
+      />
+
+      <EbayPricingModal
+        isOpen={isPricingModalOpen}
+        onClose={() => {
+          setIsPricingModalOpen(false);
+          setPricingItem(null);
+        }}
+        item={pricingItem}
       />
     </div>
   );

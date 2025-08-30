@@ -50,3 +50,17 @@ enabled = true
 # Experimental features may be deprecated any time
 [experimental.webhooks]
 enabled = true
+[functions.process-book-cover]
+verify_jwt = false
+
+[functions.ebay-account-deletion]
+verify_jwt = false
+
+[functions.ebay-oauth-start]
+verify_jwt = true
+
+[functions.ebay-oauth-callback]
+verify_jwt = false
+
+[functions.ebay-pricing]
+verify_jwt = true

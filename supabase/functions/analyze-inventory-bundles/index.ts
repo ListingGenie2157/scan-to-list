@@ -28,16 +28,14 @@ serve(async (req) => {
 
     console.log('📊 Fetching inventory for user:', userId);
 
-    // Fetch user's inventory items
+    // Fetch user's inventory items from items table
     const { data: inventoryItems, error } = await supabase
-      .from('inventory_items')
+      .from('items')
       .select(`
-        id, title, author, publisher, genre, series_title, 
-        publication_year, condition_assessment, suggested_price,
-        status, created_at
+        id, title, authors, publisher, year, status, created_at
       `)
       .eq('user_id', userId)
-      .eq('status', 'photographed')
+      .in('status', ['draft','processed'])
       .not('title', 'is', null);
 
     if (error) {
@@ -60,13 +58,13 @@ serve(async (req) => {
     const inventoryForAnalysis = inventoryItems.map(item => ({
       id: item.id,
       title: item.title,
-      author: item.author,
+      author: Array.isArray(item.authors) ? item.authors[0] : null,
       publisher: item.publisher,
-      genre: item.genre,
-      series: item.series_title,
-      year: item.publication_year,
-      condition: item.condition_assessment,
-      price: item.suggested_price
+      genre: null,
+      series: null,
+      year: item.year,
+      condition: null,
+      price: null
     }));
 
     const prompt = `Analyze this inventory and suggest bundle opportunities. Look for:

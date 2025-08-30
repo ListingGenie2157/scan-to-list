@@ -13,6 +13,23 @@ function json(body, status = 200) {
       ...corsHeaders,
       "Content-Type": "application/json"
     }
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
+const EBAY_CLIENT_ID = Deno.env.get("EBAY_CLIENT_ID")!; // for refresh
+const EBAY_CLIENT_SECRET = Deno.env.get("EBAY_CLIENT_SECRET")!; // for refresh
+
+function json(body: any, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
 
@@ -123,6 +140,155 @@ serve(async (req) => {
       return parseFloat(item.sellingStatus[0].currentPrice[0].__value__);
     }).sort((a, b) => a - b);
 
+    console.log("eBay pricing function called");
+    
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: req.headers.get("Authorization") || "" } },
+    });
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    console.log("User lookup result:", { user: user?.id, error: userError });
+    
+    if (!user) {
+      console.log("No user found - unauthorized");
+      return json({ error: "Unauthorized" }, 401);
+    }
+
+    const requestBody = await req.json().catch((e) => {
+      console.log("JSON parse error:", e);
+      return { isbn: undefined, query: undefined };
+    });
+    
+    const { isbn, query } = requestBody;
+    console.log("Request parameters:", { isbn, query });
+    
+    if (!isbn && !query) {
+      console.log("Missing required parameters");
+      return json({ error: "Provide isbn or query" }, 400);
+    }
+
+    // Get latest ebay token
+    console.log("Looking up eBay tokens for user:", user.id);
+    const { data: tokens, error: tErr } = await supabase
+      .from("oauth_tokens")
+      .select("id, access_token, refresh_token, expires_at")
+      .eq("provider", "ebay")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    console.log("Token lookup result:", { tokens: tokens?.length, error: tErr });
+    if (tErr) {
+      console.log("Token lookup error:", tErr);
+      return json({ error: tErr.message }, 500);
+    }
+    
+    const token = tokens?.[0];
+    if (!token) {
+      console.log("No eBay token found for user");
+      return json({ error: "Connect eBay first" }, 401);
+    }
+    
+    console.log("Found token, checking expiry...", { 
+      hasAccessToken: !!token.access_token, 
+      hasRefreshToken: !!token.refresh_token,
+      expiresAt: token.expires_at 
+    });
+
+    const exp = token.expires_at ? new Date(token.expires_at).getTime() : 0;
+    let accessToken = token.access_token as string;
+
+    if (!accessToken || exp - Date.now() < 60_000) {
+      // refresh
+      console.log("Token needs refresh");
+      if (!token.refresh_token) {
+        console.log("No refresh token available");
+        return json({ error: "Token expired and no refresh token available" }, 401);
+      }
+      
+      console.log("Refreshing eBay token...");
+      const basic = btoa(`${EBAY_CLIENT_ID}:${EBAY_CLIENT_SECRET}`);
+      const body = new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: token.refresh_token,
+        scope: "https://api.ebay.com/oauth/api_scope/sell.inventory",
+      });
+      const resp = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
+        method: "POST",
+        headers: {
+          "Authorization": `Basic ${basic}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: body.toString(),
+      });
+      const j = await resp.json();
+      console.log("Token refresh response:", { ok: resp.ok, status: resp.status });
+      
+      if (!resp.ok) {
+        console.log("Token refresh failed:", j);
+        return json({ error: "Refresh failed", details: j }, 401);
+      }
+
+      accessToken = j.access_token;
+      const newExpires = new Date(Date.now() + (j.expires_in - 60) * 1000).toISOString();
+
+      console.log("Updating token in database...");
+      await supabase
+        .from("oauth_tokens")
+        .update({ access_token: accessToken, expires_at: newExpires, refresh_token: j.refresh_token ?? token.refresh_token })
+        .eq("id", token.id);
+    }
+
+    console.log("Building eBay API request...");
+    const url = new URL("https://api.ebay.com/buy/browse/v1/item_summary/search");
+    url.searchParams.set("limit", "50"); // More results for better pricing data
+    
+    // Filter for COMPLETED items (sold + unsold but ended)
+    const currentYear = new Date().getFullYear();
+    const lastYear = currentYear - 1;
+    url.searchParams.set("filter", `buyingOptions:{FIXED_PRICE|AUCTION},deliveryCountry:US,itemLocationCountry:US,conditionIds:{1000|1500|2000|2500|3000|4000|5000|6000},itemEndDate:[${lastYear}-01-01T00:00:00.000Z..${currentYear}-12-31T23:59:59.999Z]`);
+    
+    if (isbn) {
+      url.searchParams.set("filter", url.searchParams.get("filter") + `,gtin:${isbn}`);
+    } else if (query) {
+      url.searchParams.set("q", query);
+    }
+    
+    console.log("Final eBay API URL:", url.toString());
+    
+    // Add completed listings filter using itemEndDate for past listings
+    // Note: eBay Browse API limitations - for true sold data we'd need Finding API or Shopping API
+    // This approach gets recently ended listings which includes sold items
+
+    console.log("Making eBay API request...");
+    const resp = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+      },
+    });
+
+    console.log("eBay API response:", { ok: resp.ok, status: resp.status });
+    const data = await resp.json();
+    
+    if (!resp.ok) {
+      console.log("eBay API error:", data);
+      return json({ error: "Browse error", details: data }, 500);
+    }
+
+    const items = (data.itemSummaries || []) as any[];
+    
+    // Extract pricing data with more details - filter for actually sold items when available
+    const validItems = items.filter(item => {
+      const hasPrice = item?.price?.value && parseFloat(item.price.value) > 0;
+      // Additional filter for sold state if available in the response
+      const isSoldOrCompleted = !item.sellingState || item.sellingState === 'ENDED' || item.sellingState === 'COMPLETED';
+      return hasPrice && isSoldOrCompleted;
+    });
+    const prices = validItems
+      .map(item => parseFloat(item.price.value))
+      .sort((a, b) => a - b);
+    
     // Calculate comprehensive pricing analytics
     const analytics = {
       count: prices.length,
@@ -151,6 +317,27 @@ serve(async (req) => {
 
     return json({
       suggestedPrice: analytics.median,
+      // Price distribution
+      q1: prices.length ? prices[Math.floor(prices.length * 0.25)] : null,
+      q3: prices.length ? prices[Math.floor(prices.length * 0.75)] : null,
+    };
+    
+    // Enhanced item data for UI
+    const processedItems = validItems.map(item => ({
+      title: item.title,
+      price: parseFloat(item.price.value),
+      currency: item.price.currency,
+      condition: item.condition,
+      sellingState: item.sellingState,
+      listingMarketplaceId: item.listingMarketplaceId,
+      itemWebUrl: item.itemWebUrl,
+      image: item.image?.imageUrl,
+      seller: item.seller?.username,
+      categories: item.categories?.map((c: any) => c.categoryName),
+    }));
+
+    return json({ 
+      suggestedPrice: analytics.median, // Use median as primary suggestion
       analytics,
       items: processedItems,
       confidence: prices.length >= 3 ? 'high' : prices.length >= 1 ? 'medium' : 'low'
@@ -160,4 +347,5 @@ serve(async (req) => {
     console.error("ebay-pricing error", e);
     return json({ error: String(e) }, 500);
   }
+});
 });

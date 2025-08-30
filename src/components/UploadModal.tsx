@@ -9,6 +9,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { BatchSettingsModal } from "./BatchSettingsModal";
 import WebBarcodeScanner from "@/components/WebBarcodeScanner";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { normalizeScan, lookupIsbn, upsertItem, storeCover } from "@/lib/scanning";
+import { useScannerSettings } from "@/hooks/useScannerSettings";
+import { useItemTypeSetting } from "@/hooks/useItemTypeSetting";
 
 
 interface BatchSettings {
@@ -45,7 +51,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
   const inputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  
+  const { mirrorCovers, setMirrorCovers } = useScannerSettings();
+  const { itemType, setItemType } = useItemTypeSetting();
 
 
   const handleDrag = (e: React.DragEvent) => {
@@ -98,34 +105,38 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
 
   const handleScannedCode = useCallback(async (code: string) => {
     setBarcode(code);
+    setShowScan(false);
 
     try {
-      const { data, error } = await supabase.functions.invoke('lookup-product', {
-        body: { barcode: code }
-      });
-
-      if (!error && data?.success) {
-        if (data.productInfo?.type === 'book') {
-          toast({
-            title: "Product Added",
-            description: `Added: ${data.productInfo.title || 'Product'}`,
-          });
-          onUploadSuccess?.();
-          onOpenChange(false);
-        } else {
-          toast({
-            title: "Barcode recognized",
-            description: "Non-book item. Use OCR/manual to continue.",
-          });
-        }
-      } else {
-        toast({ title: 'Product Not Found', description: 'Could not find product information for this barcode', variant: 'destructive' });
+      const isbn13 = normalizeScan(code);
+      if (!isbn13) {
+        toast({ title: 'Invalid code', description: 'Only ISBN-13 (books) are supported.', variant: 'destructive' });
+        return;
       }
-    } catch (err) {
+
+      const meta = await lookupIsbn(isbn13);
+      if (!meta || meta.type !== 'book') {
+        toast({ title: 'Not a book or not found', description: 'No details found for this barcode', variant: 'destructive' });
+        return;
+      }
+
+      const itemId = await upsertItem(meta);
+      if (mirrorCovers && meta.coverUrl) {
+        try {
+          await storeCover(itemId, meta.coverUrl);
+        } catch (e) {
+          console.warn('Cover mirror failed:', e);
+        }
+      }
+
+      toast({ title: 'Scan saved', description: `${isbn13} → ${meta.title || 'Untitled'}` });
+      onUploadSuccess?.();
+      onOpenChange(false);
+    } catch (err: any) {
       console.warn('lookup-product error', err);
-      toast({ title: 'Lookup Error', description: 'Failed to lookup product information', variant: 'destructive' });
+      toast({ title: 'Lookup Error', description: 'Failed to lookup or save product', variant: 'destructive' });
     }
-  }, [onUploadSuccess, onOpenChange, toast]);
+  }, [onUploadSuccess, onOpenChange, toast, mirrorCovers]);
 
   useEffect(() => {
     if (open && autoOpenScanner) {
@@ -147,6 +158,20 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
 
     if (filesRef.current.length === 0 || !user) {
       console.log('Cannot start processing: no files or no user', { files: filesRef.current.length, user: !!user });
+      if (filesRef.current.length === 0) {
+        toast({
+          title: "No photos selected",
+          description: "Please add photos to upload before continuing.",
+          variant: "destructive",
+        });
+      }
+      if (!user) {
+        toast({
+          title: "Sign in required",
+          description: "Please sign in to upload and process photos.",
+          variant: "destructive",
+        });
+      }
       return;
     }
     
@@ -165,7 +190,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
         setProcessingProgress(Math.round((i / totalFiles) * 90));
         
         // Upload to storage
-        const fileName = `${user.id}/${Date.now()}-${file.name}`;
+        const baseFolder = itemType === 'magazine' ? 'magazine' : 'book';
+        const fileName = `${user.id}/${baseFolder}/${Date.now()}-${file.name}`;
         console.log('Uploading to storage:', fileName);
         
         const { data: uploadData, error: uploadError } = await supabase.storage
@@ -217,75 +243,56 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
 
         console.log('Photo record created:', photoData);
 
-        // Create inventory item
-        console.log('Creating inventory item...');
-        const { error: inventoryError } = await supabase
-          .from('inventory_items')
-          .insert({
-            user_id: user.id,
-            photo_id: photoData.id,
-            status: 'photographed'
+        // Process the book cover with OCR
+        try {
+          console.log('Starting OCR processing for:', photoData.id);
+          console.log('📸 Starting OCR processing for photo:', photoData.id);
+          console.log('OCR request payload:', { 
+            photoId: photoData.id, 
+            imageUrl: publicUrl,
+            batchSettings: batchSettings
           });
-
-        if (inventoryError) {
-          console.error('Inventory error:', inventoryError);
-          toast({
-            title: "Inventory error",
-            description: `Failed to create inventory item: ${inventoryError.message}`,
-            variant: "destructive"
-          });
-        } else {
-          console.log('Inventory item created successfully');
           
-            // Process the book cover with OCR
-            try {
-              console.log('Starting OCR processing for:', photoData.id);
-              console.log('OCR request payload:', { 
-                photoId: photoData.id, 
-                imageUrl: publicUrl,
-                batchSettings: batchSettings
-              });
-              
-              const { data: ocrData, error: ocrError } = await supabase.functions.invoke('process-book-cover', {
-                body: { 
-                  photoId: photoData.id, 
-                  imageUrl: publicUrl,
-                  batchSettings: batchSettings
-                }
-              });
-
-            console.log('OCR response data:', ocrData);
-            console.log('OCR response error:', ocrError);
-
-            if (ocrError) {
-              console.error('OCR processing error:', ocrError);
-              toast({
-                title: "OCR Processing Failed",
-                description: `OCR failed: ${ocrError.message}. Check console for details.`,
-                variant: "destructive"
-              });
-            } else if (ocrData?.success) {
-              console.log('OCR processing successful:', ocrData);
-              toast({
-                title: "OCR Processing Complete",
-                description: `Extracted: ${ocrData.extractedInfo?.title || 'Title not found'}`,
-              });
-            } else {
-              console.warn('OCR processing returned no success flag:', ocrData);
-              toast({
-                title: "OCR Processing Warning", 
-                description: "OCR completed but may not have extracted all details.",
-                variant: "destructive"
-              });
+          const { data: ocrData, error: ocrError } = await supabase.functions.invoke('process-book-cover', {
+            body: { 
+              photoId: photoData.id, 
+              imageUrl: publicUrl,
+              batchSettings: batchSettings
             }
-          } catch (ocrError) {
-            console.error('OCR processing exception:', ocrError);
+          });
+          console.log('📋 OCR response:', { ocrData, ocrError });
+
+          console.log('OCR response data:', ocrData);
+          console.log('OCR response error:', ocrError);
+
+          if (ocrError) {
+            console.error('OCR processing error:', ocrError);
             toast({
-              title: "OCR Exception",
-              description: `OCR failed with exception: ${ocrError.message}`,
+              title: "OCR Processing Failed",
+              description: `OCR failed: ${ocrError.message}. Check console for details.`,
+              variant: "destructive"
+            });
+          } else if (ocrData?.success) {
+            console.log('OCR processing successful:', ocrData);
+            toast({
+              title: "OCR Processing Complete",
+              description: `Extracted: ${ocrData.extractedInfo?.title || 'Title not found'}`,
+            });
+          } else {
+            console.warn('OCR processing returned no success flag:', ocrData);
+            toast({
+              title: "OCR Processing Warning", 
+              description: "OCR completed but may not have extracted all details.",
               variant: "destructive"
             });
           }
+        } catch (ocrError: any) {
+          console.error('OCR processing exception:', ocrError);
+          toast({
+            title: "OCR Exception",
+            description: `OCR failed with exception: ${ocrError.message}`,
+            variant: "destructive"
+          });
         }
       }
 
@@ -402,10 +409,24 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
               <Camera className="w-4 h-4 mr-2" />
               Scan Barcode
             </Button>
-            
-            {/* Show error if any */}
-            
-            {/* Show scanned barcode if any */}
+            <div className="mt-3 flex items-center justify-center gap-4 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm">Item Type</Label>
+                <Select value={itemType} onValueChange={(v) => setItemType(v as 'book' | 'magazine')}>
+                  <SelectTrigger className="w-40 bg-background">
+                    <SelectValue placeholder="Item Type" />
+                  </SelectTrigger>
+                  <SelectContent className="z-[60] bg-popover">
+                    <SelectItem value="book">Book</SelectItem>
+                    <SelectItem value="magazine">Magazine</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch id="mirror-covers-upload" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
+                <Label htmlFor="mirror-covers-upload">Mirror external covers to storage</Label>
+              </div>
+            </div>
             {barcode && (
               <div className="mt-2 p-2 bg-muted rounded text-sm">
                 <strong>Scanned:</strong> {barcode}

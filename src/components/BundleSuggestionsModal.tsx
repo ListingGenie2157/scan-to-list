@@ -53,21 +53,26 @@ export const BundleSuggestionsModal = ({ isOpen, onClose }: BundleSuggestionsMod
         setSuggestions(data.suggestions || []);
         
         // Fetch item details for display
-        const allItemIds = data.suggestions.flatMap((s: BundleSuggestion) => s.item_ids);
-        if (allItemIds.length > 0) {
-          const { data: items } = await supabase
-            .from('inventory_items')
-            .select('id, title, author, suggested_price')
-            .in('id', allItemIds);
-          
-          if (items) {
-            const itemsMap = items.reduce((acc, item) => {
-              acc[item.id] = item;
-              return acc;
-            }, {} as {[key: string]: any});
-            setSelectedItems(itemsMap);
+          const allItemIds = data.suggestions.flatMap((s: BundleSuggestion) => s.item_ids);
+          if (allItemIds.length > 0) {
+            const { data: items } = await supabase
+              .from('items')
+              .select('id, title, authors')
+              .in('id', allItemIds.map((id: string) => Number(id)));
+            
+            if (items) {
+              const itemsMap = items.reduce((acc: {[key: string]: any}, it: any) => {
+                acc[String(it.id)] = {
+                  id: String(it.id),
+                  title: it.title ?? 'Untitled',
+                  author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,
+                  suggested_price: 0,
+                };
+                return acc;
+              }, {} as {[key: string]: any});
+              setSelectedItems(itemsMap);
+            }
           }
-        }
       }
     } catch (error) {
       console.error('Error fetching bundle suggestions:', error);
@@ -100,14 +105,14 @@ export const BundleSuggestionsModal = ({ isOpen, onClose }: BundleSuggestionsMod
 
       if (bundleError) throw bundleError;
 
-      // Update inventory items to link to bundle
+      // Update items to link to bundle
       const { error: updateError } = await supabase
-        .from('inventory_items')
+        .from('items')
         .update({ 
           bundle_id: bundle.id,
           status: 'bundled'
         })
-        .in('id', suggestion.item_ids);
+        .in('id', suggestion.item_ids.map((id) => Number(id)));
 
       if (updateError) throw updateError;
 
