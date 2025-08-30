@@ -9,7 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
-import { EbayAuthModal } from "./EbayAuthModal";
 import { ConnectEbayButton } from "./ConnectEbayButton";
 import { Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
@@ -20,7 +19,6 @@ export const Dashboard = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [autoOpenScanner, setAutoOpenScanner] = useState(false);
   const [showBundleSuggestions, setShowBundleSuggestions] = useState(false);
-  const [showEbayAuth, setShowEbayAuth] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "inventory">("overview");
   const [ebayStatus, setEbayStatus] = useState<{
     connected: boolean;
@@ -349,15 +347,6 @@ export const Dashboard = () => {
                 <div className="mt-4 pt-4 border-t">
                   <div className="flex flex-wrap gap-2">
                     <Button 
-                      variant={ebayStatus.connected ? "outline" : "default"}
-                      size="sm"
-                      onClick={() => setShowEbayAuth(true)}
-                      className="flex items-center gap-2"
-                    >
-                      <Sparkles className="w-4 h-4" />
-                      {ebayStatus.connected ? "Manage eBay Auth" : "Setup eBay OAuth"}
-                    </Button>
-                    <Button 
                       variant="outline" 
                       size="sm"
                       onClick={testEbayConnection}
@@ -429,15 +418,6 @@ export const Dashboard = () => {
                     <Package className="w-6 h-6 mb-2" />
                     Create Listings
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="lg" 
-                    className="h-20 flex-col"
-                    onClick={() => setShowEbayAuth(true)}
-                  >
-                    <Package className="w-6 h-6 mb-2" />
-                    Connect eBay
-                  </Button>
                   {/* eBay Connect */}
                   <ConnectEbayButton />
                 </div>
@@ -505,15 +485,6 @@ export const Dashboard = () => {
       <BundleSuggestionsModal 
         isOpen={showBundleSuggestions}
         onClose={() => setShowBundleSuggestions(false)}
-      />
-      
-      <EbayAuthModal 
-        isOpen={showEbayAuth}
-        onClose={() => setShowEbayAuth(false)}
-        onAuthSuccess={() => {
-          setShowEbayAuth(false);
-          // Show success message
-        }}
       />
     </div>
   );

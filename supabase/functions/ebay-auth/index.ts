@@ -14,8 +14,7 @@ const EBAY_REDIRECT_URI = Deno.env.get('EBAY_REDIRECT_URI');
 const EBAY_SCOPES = [
   'https://api.ebay.com/oauth/api_scope',
   'https://api.ebay.com/oauth/api_scope/sell.inventory',
-  'https://api.ebay.com/oauth/api_scope/sell.account.readonly',
-  'https://api.ebay.com/oauth/api_scope/buy.browse'
+  'https://api.ebay.com/oauth/api_scope/sell.account.readonly'
 ].join(' ');
 
 // eBay API Endpoints
