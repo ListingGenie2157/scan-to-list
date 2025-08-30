@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -71,7 +71,7 @@ export const Dashboard = () => {
     }, 100);
   };
 
-  const testEbayConnection = async () => {
+  const testEbayConnection = useCallback(async () => {
     if (!user) return; // Don't test if no user
     
     setEbayStatus(prev => ({ ...prev, testing: true, error: null }));
@@ -127,17 +127,10 @@ export const Dashboard = () => {
         variant: "destructive",
       });
     }
-  };
+  }, [user, supabase, toast]);
 
-  // Test eBay connection on component mount
-  useEffect(() => {
-    if (activeTab === "overview") {
-      // Add small delay to avoid hydration issues
-      setTimeout(() => {
-        testEbayConnection();
-      }, 100);
-    }
-  }, [activeTab]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Remove automatic eBay connection test to prevent React error #310
+  // Users can manually test by clicking the "Test Connection" button
 
   // Mock data for demonstration
   const stats = {
