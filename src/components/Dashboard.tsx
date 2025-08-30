@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -71,22 +71,14 @@ export const Dashboard = () => {
     }, 100);
   };
 
-  const testEbayConnection = useCallback(async () => {
-    if (!user) return; // Don't test if no user
+  const testEbayConnection = async () => {
+    if (!user) return;
     
     setEbayStatus(prev => ({ ...prev, testing: true, error: null }));
     
     try {
-      // Test the eBay pricing function with improved error reporting
-      // Include auth header even though verify_jwt is false, just in case
-      const { data: sessionData } = await supabase.auth.getSession();
-      const session = sessionData?.session;
-      
       const { data, error } = await supabase.functions.invoke('ebay-pricing', {
-        body: { query: 'test book' },
-        headers: session?.access_token ? {
-          Authorization: `Bearer ${session.access_token}`
-        } : {}
+        body: { query: 'test book' }
       });
 
       if (error) {
@@ -94,7 +86,6 @@ export const Dashboard = () => {
       }
 
       if (data?.error) {
-        // Now we get specific error messages from the function
         throw new Error(data.error);
       }
 
@@ -113,7 +104,7 @@ export const Dashboard = () => {
       } else {
         throw new Error('Unexpected response from eBay function');
       }
-    } catch (error) {
+    } catch (error: any) {
       setEbayStatus({
         connected: false,
         testing: false,
@@ -127,7 +118,7 @@ export const Dashboard = () => {
         variant: "destructive",
       });
     }
-  }, [user, supabase, toast]);
+  };
 
   // Remove automatic eBay connection test to prevent React error #310
   // Users can manually test by clicking the "Test Connection" button
