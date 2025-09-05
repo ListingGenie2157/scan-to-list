@@ -12,7 +12,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { CreateListingModal } from "@/components/CreateListingModal";
 import { BulkListingModal } from "@/components/BulkListingModal";
 import { BulkEditModal } from "@/components/BulkEditModal";
-import { EbayPricingModal } from "@/components/EbayPricingModal";
+import EbayPricingModal from "@/components/EbayPricingModal";
 
 interface InventoryItem {
   id: string;
