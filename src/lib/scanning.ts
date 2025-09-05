@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getActivePricing } from "@/lib/ebayCompat";
 
 export type LookupMeta = {
   type: string | null;
@@ -141,19 +142,18 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
       // If no ISBN but we have a title, fallback to query based search.
       if (!body.isbn && meta.title) body.query = meta.title;
       if (Object.keys(body).length > 0) {
-        const { data: pricingData, error: pricingErr } = await supabase.functions.invoke('ebay-pricing', { body });
-        if (!pricingErr) {
+        try {
+          const pricingData = await getActivePricing(body);
           // The eBay pricing function returns { suggestedPrice: number, analytics: ..., items: ..., confidence: ... }
           const price = (pricingData as any)?.suggestedPrice as number | undefined;
           if (typeof price === 'number' && isFinite(price) && price > 0) {
             suggestedPrice = price;
           }
+        } catch (pricingErr) {
+          // Swallow errors from eBay pricing to allow fallback to heuristic
+          console.warn('eBay pricing error:', pricingErr);
         }
       }
-    } catch (e) {
-      // Swallow errors from eBay pricing to allow fallback to heuristic
-      console.warn('eBay pricing error:', e);
-    }
     // If we still don't have a price, fall back to OpenAI/heuristic generator
     if (typeof suggestedPrice !== 'number') {
       const { data, error } = await supabase.functions.invoke('generate-price', {

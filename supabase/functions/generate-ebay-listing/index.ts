@@ -110,7 +110,7 @@ Format your response as JSON with "title" and "description" fields. Do not inclu
       };
     }
 
-    // Generate market-based pricing using ebay-pricing function
+    // Generate market-based pricing using ebay-app-search function
     const marketPrice = await getMarketBasedPricing(itemData);
     if (marketPrice) {
       optimizedListing.price = marketPrice;
@@ -135,7 +135,7 @@ Format your response as JSON with "title" and "description" fields. Do not inclu
   }
 });
 
-// Function to get market-based pricing using the ebay-pricing edge function
+// Function to get market-based pricing using the ebay-app-search edge function
 async function getMarketBasedPricing(itemData: any): Promise<number | null> {
   const { title, author, isbn } = itemData;
   
@@ -153,9 +153,9 @@ async function getMarketBasedPricing(itemData: any): Promise<number | null> {
       return null;
     }
 
-    // Call the ebay-pricing edge function
+    // Call the ebay-app-search edge function
     const base = Deno.env.get("SUPABASE_URL")!.replace(".supabase.co", ".functions.supabase.co");
-    const pricingUrl = `${base}/ebay-pricing`;
+    const pricingUrl = `${base}/ebay-app-search`;
     
     const response = await fetch(pricingUrl, {
       method: 'POST',
@@ -219,4 +219,4 @@ function calculateFallbackPrice(itemData: any): number {
   return Math.round(basePrice * 100) / 100;
 }
 
-// Removed old eBay API functions - now using ebay-pricing edge function
+// Removed old eBay API functions - now using ebay-app-search edge function

@@ -6,6 +6,7 @@ import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle, L
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { getActivePricing } from "@/lib/ebayCompat";
 import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
@@ -75,13 +76,7 @@ export const Dashboard = () => {
     setEbayStatus(prev => ({ ...prev, testing: true, error: null }));
     
     try {
-      const { data, error } = await supabase.functions.invoke('ebay-pricing', {
-        body: { query: 'test book' }
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
+      const data = await getActivePricing({ query: 'test book' });
 
       if (data?.error) {
         throw new Error(data.error);
