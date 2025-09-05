@@ -190,28 +190,33 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
     try {
       console.log('Creating eBay listing for item:', item?.id, 'with data:', listingData);
       
-      // For now, just save the listing data locally since actual eBay API posting isn't implemented
-      // Update item with listing details and mark as ready to list
-      const { error: updateError } = await supabase
-        .from('inventory_items')
-        .update({ 
-          status: 'ready_to_list',
-          listing_title: listingData.title,
-          listing_price: parseFloat(listingData.price),
-          listing_description: listingData.description,
-          listing_condition: listingData.condition,
-          listing_category: listingData.category,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', item.id);
-      
-      if (updateError) {
-        throw new Error(`Failed to save listing data: ${updateError.message}`);
+      // Create the actual eBay listing
+      const { data, error } = await supabase.functions.invoke('ebay-create-listing', {
+        body: {
+          itemId: item.id,
+          listingData: {
+            title: listingData.title,
+            description: listingData.description,
+            price: parseFloat(listingData.price),
+            condition: listingData.condition,
+            categoryId: listingData.categoryId,
+            isbn: item.isbn,
+            author: item.author
+          }
+        }
+      });
+
+      if (error) {
+        throw new Error(error.message);
+      }
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to create eBay listing');
       }
 
       toast({
-        title: "Listing Prepared!",
-        description: `Item prepared for eBay listing. Ready to post when eBay API is configured.`,
+        title: "Listing Created Successfully!",
+        description: `Your item has been listed on eBay. Listing ID: ${data.listingId}`,
       });
       
       onClose();
@@ -229,7 +234,7 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
       } else {
         toast({
           title: "Listing Creation Failed",
-          description: `Error: ${error.message}. This feature requires eBay API implementation.`,
+          description: error.message || "Failed to create eBay listing. Please try again.",
           variant: "destructive",
         });
       }
