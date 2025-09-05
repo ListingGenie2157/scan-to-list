@@ -1,8 +1,8 @@
--- Add title preferences to user_profiles table
+-- Add title preferences to user_profiles table (using IF NOT EXISTS)
 ALTER TABLE public.user_profiles 
-ADD COLUMN title_prefixes text[] DEFAULT '{}',
-ADD COLUMN title_suffixes text[] DEFAULT '{}',
-ADD COLUMN custom_title_text text DEFAULT '';
+ADD COLUMN IF NOT EXISTS title_prefixes text[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS title_suffixes text[] DEFAULT '{}',
+ADD COLUMN IF NOT EXISTS custom_title_text text DEFAULT '';
 
 -- Create a function to update user preferences
 CREATE OR REPLACE FUNCTION update_title_preferences(
