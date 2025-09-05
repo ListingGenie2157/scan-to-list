@@ -1,441 +1,257 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.53.0';
+import "https://deno.land/x/xhr@0.1.0/mod.ts"; // only needed if a lib expects XHR
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
 
-const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-const supabaseUrl = Deno.env.get('SUPABASE_URL');
-const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+const CORS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Max-Age": "86400",
 };
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    console.log('🚀 Function called with method:', req.method);
-    
-    let requestData;
-    try {
-      requestData = await req.json();
-      console.log('📨 Raw request data:', JSON.stringify(requestData, null, 2));
-    } catch (parseError) {
-      console.error('❌ JSON parsing error:', parseError);
-      return new Response(JSON.stringify({ 
-        error: 'Invalid JSON in request body',
-        success: false,
-        parseError: parseError.message
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    
-    const { photoId, imageUrl } = requestData;
-    console.log('📋 Request data:', { photoId, imageUrl });
-
-    if (!photoId || !imageUrl) {
-      console.error('❌ Missing required fields', { photoId: !!photoId, imageUrl: !!imageUrl });
-      return new Response(JSON.stringify({ 
-        error: 'Photo ID and image URL are required',
-        success: false,
-        received: { hasPhotoId: !!photoId, hasImageUrl: !!imageUrl }
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (!openAIApiKey) {
-      console.error('❌ OpenAI API key not found');
-      return await handleMissingAPIKey(photoId, supabaseUrl, supabaseServiceKey);
-    }
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      console.error('❌ Supabase credentials not found');
-      return new Response(JSON.stringify({ 
-        error: 'Supabase credentials not configured',
-        success: false
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    console.log('🖼️ Processing image with OpenAI Vision:', imageUrl);
-    console.log('🔑 API key available:', !!openAIApiKey);
-
-    // Initialize Supabase client
-    console.log('🗄️ Initializing Supabase...');
-    const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
-
-    // Enhanced multi-item detection prompt
-    const visionPrompt = `Analyze this image and extract information about the book(s), magazine(s), or other items shown. 
-
-CRITICAL: First determine if this image contains MULTIPLE distinct items or just ONE item:
-
-If MULTIPLE items are detected:
-- Set "item_count" to the number of distinct items
-- Set "is_bundle" to true
-- Analyze what type of bundle this could be:
-  * If all items are the same title/book: Create specific lot description like "Lot of X [Title] books"
-  * If items share theme/genre/author: Create themed bundle like "Witchcraft Book Bundle" or "Stephen King Collection"
-  * If mixed items: Create generic bundle like "Mixed Book Lot" or "Book Bundle"
-- Set "bundle_title" to an appropriate bundle name
-- Set "bundle_description" to describe the collection
-- List individual titles in "individual_titles" array if clearly visible
-
-If SINGLE item detected:
-- Set "item_count" to 1
-- Set "is_bundle" to false
-- Extract standard single item information
-
-For ALL cases, provide:
-- "title": Main title or bundle name
-- "author": Author(s) or "Various" for bundles
-- "publisher": Publisher(s) or "Various" for bundles
-- "publication_year": Year or range for bundles
-- "isbn": ISBN if single item, null for bundles
-- "genre": Primary genre/category
-- "condition_assessment": Overall condition (mint/excellent/good/fair/poor)
-- "confidence_score": 0.0-1.0 based on text clarity
-- "ocr_quality": good/fair/poor
-- "all_visible_text": All text you can see in the image
-
-Return as JSON only, no other text.`;
-
-    console.log('📡 Calling OpenAI API...');
-    
-    // Try multiple model names in case one doesn't work  
-    const modelNames = ['gpt-4o-mini', 'gpt-4o'];
-    let response;
-    let modelUsed;
-    
-    for (const model of modelNames) {
-      try {
-        console.log(`🔍 Trying model: ${model}`);
-        response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openAIApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: visionPrompt },
-                  { 
-                    type: 'image_url', 
-                    image_url: { 
-                      url: imageUrl,
-                      detail: "high" // Request high detail for better OCR
-                    } 
-                  }
-                ]
-              }
-            ],
-            max_tokens: 1000, // Increased for more detailed extraction
-            temperature: 0.0, // Zero temperature for consistent OCR
-          }),
-        });
-        
-        if (response.ok) {
-          modelUsed = model;
-          console.log(`✅ Successfully used model: ${model}`);
-          break;
-        } else {
-          console.log(`❌ Model ${model} failed with status:`, response.status);
-        }
-      } catch (modelError) {
-        console.log(`❌ Model ${model} error:`, modelError.message);
-        continue;
-      }
-    }
-
-    if (!response || !response.ok) {
-      console.error('❌ All OpenAI models failed');
-      const errorText = response ? await response.text() : 'No response';
-      console.error('Error details:', errorText);
-      
-      return await handleAPIError(photoId, supabase, `All models failed: ${errorText}`);
-    }
-
-    let data;
-    let extractedContent;
-    try {
-      data = await response.json();
-      extractedContent = data.choices?.[0]?.message?.content;
-      
-      if (!extractedContent) {
-        console.error('❌ No content in OpenAI response:', data);
-        return await handleAPIError(photoId, supabase, 'No content in OpenAI response');
-      }
-    } catch (jsonError) {
-      console.error('❌ Failed to parse OpenAI API response as JSON:', jsonError);
-      const responseText = await response.text();
-      console.error('Raw response:', responseText);
-      return await handleAPIError(photoId, supabase, `OpenAI API returned invalid JSON: ${responseText}`);
-    }
-    
-    console.log('✅ OpenAI Vision Response:', extractedContent);
-    console.log('🤖 Model used:', modelUsed);
-
-    // Parse the extracted content with multiple fallback strategies
-    let extractedInfo;
-    try {
-      // Strategy 1: Try parsing as-is
-      extractedInfo = JSON.parse(extractedContent);
-    } catch (parseError1) {
-      console.log('❌ Strategy 1 failed, trying to extract JSON block...');
-      try {
-        // Strategy 2: Extract JSON from code blocks or markdown
-        const jsonMatch = extractedContent.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/) || 
-                         extractedContent.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const jsonString = jsonMatch[1] || jsonMatch[0];
-          extractedInfo = JSON.parse(jsonString);
-        } else {
-          throw new Error('No JSON found in response');
-        }
-      } catch (parseError2) {
-        console.error('❌ Strategy 2 failed, trying manual extraction...');
-        // Strategy 3: Manual extraction of key information
-        return await handleJSONParseError(photoId, supabase, extractedContent);
-      }
-    }
-
-    // Validate OCR quality
-    if (extractedInfo.ocr_quality === 'failed' || extractedInfo.confidence_score < 0.3) {
-      console.log('⚠️ Low OCR quality detected, may need manual review');
-    }
-
-    // Enhanced data cleaning with better validation
-    const cleanedInfo = {
-      title: extractedInfo.title && extractedInfo.title !== 'null' ? extractedInfo.title.trim() : null,
-      subtitle: extractedInfo.subtitle && extractedInfo.subtitle !== 'null' ? extractedInfo.subtitle.trim() : null,
-      author: extractedInfo.author && extractedInfo.author !== 'null' ? extractedInfo.author.trim() : null,
-      publisher: extractedInfo.publisher && extractedInfo.publisher !== 'null' ? extractedInfo.publisher.trim() : null,
-      publication_year: extractedInfo.publication_year ? parseInt(String(extractedInfo.publication_year)) : null,
-      isbn: extractedInfo.isbn && extractedInfo.isbn !== 'null' ? extractedInfo.isbn.replace(/[^\d]/g, '') : null,
-      genre: extractedInfo.genre || 'book',
-      condition_assessment: extractedInfo.condition_assessment || 'good',
-      confidence_score: Math.max(0.1, Math.min(1.0, parseFloat(extractedInfo.confidence_score) || 0.7)),
-      issue_number: extractedInfo.issue_number && extractedInfo.issue_number !== 'null' ? extractedInfo.issue_number.trim() : null,
-      issue_date: extractedInfo.issue_date && extractedInfo.issue_date !== 'null' ? extractedInfo.issue_date.trim() : null,
-      series_title: extractedInfo.series_title && extractedInfo.series_title !== 'null' ? extractedInfo.series_title.trim() : null,
-      edition: extractedInfo.edition && extractedInfo.edition !== 'null' ? extractedInfo.edition.trim() : null,
-      all_visible_text: extractedInfo.all_visible_text || '',
-      ocr_quality: extractedInfo.ocr_quality || 'unknown',
-      model_used: modelUsed
-    };
-
-    // Enhanced pricing logic
-    const suggested_price = calculatePrice(cleanedInfo);
-    cleanedInfo.suggested_price = suggested_price;
-
-    console.log('🧹 Cleaned extracted info:', cleanedInfo);
-
-    // Update inventory item with more comprehensive data
-    const { data: inventoryItem, error: inventoryError } = await supabase
-      .from('inventory_items')
-      .update({
-        title: cleanedInfo.title,
-        subtitle: cleanedInfo.subtitle,
-        author: cleanedInfo.author,
-        publisher: cleanedInfo.publisher,
-        publication_year: cleanedInfo.publication_year,
-        isbn: cleanedInfo.isbn,
-        genre: cleanedInfo.genre,
-        condition_assessment: cleanedInfo.condition_assessment,
-        suggested_price: cleanedInfo.suggested_price,
-        confidence_score: cleanedInfo.confidence_score,
-        issue_number: cleanedInfo.issue_number,
-        issue_date: cleanedInfo.issue_date,
-        series_title: cleanedInfo.series_title,
-        edition: cleanedInfo.edition,
-        status: 'photographed',
-        extracted_text: extractedContent,
-        all_visible_text: cleanedInfo.all_visible_text,
-        ocr_quality: cleanedInfo.ocr_quality,
-        model_used: cleanedInfo.model_used,
-        processed_at: new Date().toISOString()
-      })
-      .eq('photo_id', photoId)
-      .select()
-      .single();
-
-    if (inventoryError) {
-      console.error('❌ Database error:', inventoryError);
-      throw new Error(`Database error: ${inventoryError.message}`);
-    }
-
-    console.log('✅ Successfully saved inventory item:', inventoryItem);
-
-    return new Response(JSON.stringify({ 
-      success: true, 
-      inventoryItem,
-      extractedInfo: cleanedInfo,
-      debug: {
-        modelUsed,
-        ocrQuality: cleanedInfo.ocr_quality,
-        confidence: cleanedInfo.confidence_score,
-        visibleText: cleanedInfo.all_visible_text
-      }
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-
-  } catch (error) {
-    console.error('💥 Error in process-book-cover function:', error);
-    return new Response(JSON.stringify({ 
-      error: error.message,
-      success: false,
-      timestamp: new Date().toISOString()
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-});
-
-// Helper functions
-async function handleMissingAPIKey(photoId: string, supabaseUrl: string, supabaseServiceKey: string) {
-  const fallbackInfo = {
-    title: 'API Key Missing - Manual Review Needed',
-    author: null,
-    publisher: null,
-    publication_year: null,
-    isbn: null,
-    genre: 'book',
-    condition_assessment: 'good',
-    confidence_score: 0.1,
-    issue_number: null,
-    issue_date: null,
-    suggested_price: 10.0,
-    ocr_quality: 'failed'
-  };
-  
-  const supabase = createClient(supabaseUrl!, supabaseServiceKey!);
-  const { data: inventoryItem } = await supabase
-    .from('inventory_items')
-    .update(fallbackInfo)
-    .eq('photo_id', photoId)
-    .select()
-    .maybeSingle();
-
-  return new Response(JSON.stringify({ 
-    success: true, 
-    inventoryItem,
-    extractedInfo: fallbackInfo,
-    message: 'OpenAI API key not configured'
-  }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+function json(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...CORS, "Content-Type": "application/json" },
   });
 }
 
-async function handleAPIError(photoId: string, supabase: any, errorMessage: string) {
-  const fallbackInfo = {
-    title: 'OCR Processing Failed - Manual Review Needed',
-    author: null,
-    publisher: null,
-    publication_year: null,
-    isbn: null,
-    genre: 'book',
-    condition_assessment: 'good',
-    confidence_score: 0.1,
-    issue_number: null,
-    issue_date: null,
-    suggested_price: 10.0,
-    ocr_quality: 'failed'
-  };
-  
-  const { data: inventoryItem } = await supabase
-    .from('inventory_items')
-    .update(fallbackInfo)
-    .eq('photo_id', photoId)
-    .select()
-    .maybeSingle();
-
-  return new Response(JSON.stringify({ 
-    success: true, 
-    inventoryItem,
-    extractedInfo: fallbackInfo,
-    message: `OCR failed: ${errorMessage}`
-  }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+function cleanStr(v: unknown) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s === "null" || s === "undefined" || s === "" ? null : s;
 }
 
-async function handleJSONParseError(photoId: string, supabase: any, rawContent: string) {
-  // Try to extract some basic info even if JSON parsing failed
-  const titleMatch = rawContent.match(/title['":\s]+([^'",\n]+)/i);
-  const authorMatch = rawContent.match(/author['":\s]+([^'",\n]+)/i);
-  
-  const fallbackInfo = {
-    title: titleMatch ? titleMatch[1].trim() : 'JSON Parse Failed - Manual Review Needed',
-    author: authorMatch ? authorMatch[1].trim() : null,
-    publisher: null,
-    publication_year: null,
-    isbn: null,
-    genre: 'book',
-    condition_assessment: 'good',
-    confidence_score: 0.2,
-    issue_number: null,
-    issue_date: null,
-    suggested_price: 10.0,
-    ocr_quality: 'poor',
-    all_visible_text: rawContent
-  };
-  
-  const { data: inventoryItem } = await supabase
-    .from('inventory_items')
-    .update(fallbackInfo)
-    .eq('photo_id', photoId)
-    .select()
-    .maybeSingle();
+function digitsOnly(v: unknown) {
+  const s = cleanStr(v);
+  return s ? s.replace(/[^0-9Xx]/g, "") : null; // leave X for ISBN-10 check digits
+}
 
-  return new Response(JSON.stringify({ 
-    success: true, 
-    inventoryItem,
-    extractedInfo: fallbackInfo,
-    message: 'JSON parsing failed but extracted some info'
-  }), {
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+function toIntOrNull(v: unknown) {
+  const n = parseInt(String(v), 10);
+  return Number.isFinite(n) ? n : null;
 }
 
 function calculatePrice(info: any): number {
-  const isMagazine = info.genre?.toLowerCase().includes('magazine');
+  const isMagazine = info.genre?.toLowerCase().includes("magazine");
   const isVintage = info.publication_year && info.publication_year < 1990;
-  
-  let basePrice = isMagazine ? 8.0 : 15.0;
-  
-  // Adjust for condition
-  const conditionMultiplier = {
-    'mint': 1.5,
-    'excellent': 1.2,
-    'good': 1.0,
-    'fair': 0.6
-  };
-  
-  basePrice *= conditionMultiplier[info.condition_assessment] || 1.0;
-  
-  // Vintage bonus
-  if (isVintage) {
-    basePrice *= 1.3;
-  }
-  
-  // Series bonus
-  if (info.series_title) {
-    basePrice *= 1.1;
-  }
-  
-  return Math.round(basePrice * 100) / 100;
+  let base = isMagazine ? 8.0 : 15.0;
+  const mul: Record<string, number> = { mint: 1.5, excellent: 1.2, good: 1.0, fair: 0.6, poor: 0.4 };
+  base *= mul[(info.condition_assessment || "good").toLowerCase()] || 1.0;
+  if (isVintage) base *= 1.3;
+  if (info.series_title) base *= 1.1;
+  return Math.round(base * 100) / 100;
 }
+
+const VISION_PROMPT = `Analyze this image and extract information about the book(s), magazine(s), or other items shown.
+Return only JSON, matching this schema exactly (no extra keys):
+{
+  "item_count": number,
+  "is_bundle": boolean,
+  "bundle_title": string|null,
+  "bundle_description": string|null,
+  "individual_titles": string[]|null,
+  "title": string|null,
+  "subtitle": string|null,
+  "author": string|null,
+  "publisher": string|null,
+  "publication_year": number|null,
+  "isbn": string|null,
+  "genre": string|null,
+  "condition_assessment": "mint"|"excellent"|"good"|"fair"|"poor"|null,
+  "issue_number": string|null,
+  "issue_date": string|null,
+  "series_title": string|null,
+  "edition": string|null,
+  "confidence_score": number,
+  "ocr_quality": "good"|"fair"|"poor"|"failed",
+  "all_visible_text": string
+}
+Rules:
+- If multiple distinct items: is_bundle=true and fill bundle_* and individual_titles.
+- If single item: is_bundle=false; provide standard single-item fields.
+- confidence_score in [0,1].
+`;
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
+
+  try {
+    let requestData: any = null;
+    try {
+      requestData = await req.json();
+    } catch (e) {
+      return json(400, { success: false, error: "Invalid JSON in request body", detail: String(e) });
+    }
+
+    const photoId = cleanStr(requestData?.photoId);
+    const imageUrl = cleanStr(requestData?.imageUrl);
+
+    if (!photoId || !imageUrl) {
+      return json(400, {
+        success: false,
+        error: "Photo ID and image URL are required",
+        received: { hasPhotoId: !!photoId, hasImageUrl: !!imageUrl },
+      });
+    }
+
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return json(500, { success: false, error: "Supabase credentials not configured" });
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    if (!OPENAI_API_KEY) {
+      // Soft-fail: mark item for manual review, return 200 so the client doesn't see a random non-2xx
+      const fallback = {
+        title: "API Key Missing - Manual Review Needed",
+        genre: "book",
+        condition_assessment: "good",
+        confidence_score: 0.1,
+        suggested_price: 10.0,
+        ocr_quality: "failed",
+      };
+      const { data: inventoryItem } = await supabase
+        .from("inventory_items")
+        .update({ ...fallback, processed_at: new Date().toISOString() })
+        .eq("photo_id", photoId)
+        .select()
+        .maybeSingle();
+      return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: "OPENAI_API_KEY missing" });
+    }
+
+    // Call OpenAI Vision
+    const modelNames = ["gpt-4o-mini", "gpt-4o"]; // try mini first, then full
+    let resp: Response | null = null;
+    let modelUsed: string | null = null;
+
+    for (const model of modelNames) {
+      const r = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          response_format: { type: "json_object" },
+          temperature: 0,
+          max_tokens: 900,
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: VISION_PROMPT },
+                { type: "image_url", image_url: { url: imageUrl, detail: "high" } },
+              ],
+            },
+          ],
+        }),
+      }).catch(() => null);
+
+      if (r && r.ok) { resp = r; modelUsed = model; break; }
+    }
+
+    if (!resp || !resp.ok) {
+      const errText = resp ? await resp.text() : "no response";
+      // Soft-fail with DB update so your UI gets a 200 and a reason
+      const fallback = {
+        title: "OCR Processing Failed - Manual Review Needed",
+        genre: "book",
+        condition_assessment: "good",
+        confidence_score: 0.1,
+        suggested_price: 10.0,
+        ocr_quality: "failed",
+      };
+      const { data: inventoryItem } = await supabase
+        .from("inventory_items")
+        .update({ ...fallback, processed_at: new Date().toISOString(), ocr_error: errText.slice(0, 500) })
+        .eq("photo_id", photoId)
+        .select()
+        .maybeSingle();
+      return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: `OCR failed: ${errText}` });
+    }
+
+    const body = await resp.json();
+    const content = body?.choices?.[0]?.message?.content;
+    if (!content) {
+      return json(200, { success: true, message: "Vision returned no content", raw: body });
+    }
+
+    // Because response_format=json_object, content should be valid JSON
+    let extracted: any = {};
+    try { extracted = JSON.parse(content); } catch { extracted = {}; }
+
+    const cleaned = {
+      item_count: toIntOrNull(extracted.item_count) ?? 1,
+      is_bundle: Boolean(extracted.is_bundle),
+      bundle_title: cleanStr(extracted.bundle_title),
+      bundle_description: cleanStr(extracted.bundle_description),
+      individual_titles: Array.isArray(extracted.individual_titles) ? extracted.individual_titles : null,
+      title: cleanStr(extracted.title),
+      subtitle: cleanStr(extracted.subtitle),
+      author: cleanStr(extracted.author) || (extracted.is_bundle ? "Various" : null),
+      publisher: cleanStr(extracted.publisher) || (extracted.is_bundle ? "Various" : null),
+      publication_year: toIntOrNull(extracted.publication_year),
+      isbn: digitsOnly(extracted.isbn),
+      genre: cleanStr(extracted.genre) || "book",
+      condition_assessment: cleanStr(extracted.condition_assessment) || "good",
+      issue_number: cleanStr(extracted.issue_number),
+      issue_date: cleanStr(extracted.issue_date),
+      series_title: cleanStr(extracted.series_title),
+      edition: cleanStr(extracted.edition),
+      confidence_score: Math.max(0.1, Math.min(1, Number(extracted.confidence_score ?? 0.7))),
+      ocr_quality: cleanStr(extracted.ocr_quality) || "unknown",
+      all_visible_text: cleanStr(extracted.all_visible_text) || "",
+      model_used: modelUsed,
+    } as const;
+
+    const suggested_price = calculatePrice(cleaned);
+
+    const { data: inventoryItem, error: dbErr } = await supabase
+      .from("inventory_items")
+      .update({
+        title: cleaned.title,
+        subtitle: cleaned.subtitle,
+        author: cleaned.author,
+        publisher: cleaned.publisher,
+        publication_year: cleaned.publication_year,
+        isbn: cleaned.isbn,
+        genre: cleaned.genre,
+        condition_assessment: cleaned.condition_assessment,
+        suggested_price,
+        confidence_score: cleaned.confidence_score,
+        issue_number: cleaned.issue_number,
+        issue_date: cleaned.issue_date,
+        series_title: cleaned.series_title,
+        edition: cleaned.edition,
+        status: "photographed",
+        extracted_text: content,
+        all_visible_text: cleaned.all_visible_text,
+        ocr_quality: cleaned.ocr_quality,
+        model_used: cleaned.model_used,
+        processed_at: new Date().toISOString(),
+      })
+      .eq("photo_id", photoId)
+      .select()
+      .maybeSingle(); // don't 406 when no row
+
+    if (dbErr) {
+      // Still return 200 with a descriptive payload so the client doesn't just see "non-2xx"
+      return json(200, { success: false, error: "DB update failed", detail: dbErr.message, extractedInfo: cleaned });
+    }
+
+    return json(200, {
+      success: true,
+      inventoryItem,
+      extractedInfo: { ...cleaned, suggested_price },
+    });
+  } catch (e) {
+    // Final safety net: never leak a bare 500 without context
+    return json(200, { success: false, error: "Unhandled exception", detail: String(e) });
+  }
+});
