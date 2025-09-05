@@ -12,7 +12,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { CreateListingModal } from "@/components/CreateListingModal";
 import { BulkListingModal } from "@/components/BulkListingModal";
 import { BulkEditModal } from "@/components/BulkEditModal";
-import { EbayPricingModal } from "@/components/EbayPricingModal";
+import EbayPricingModal from "@/components/EbayPricingModal";
 
 interface InventoryItem {
   id: string;
@@ -792,12 +792,18 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       />
 
       <EbayPricingModal
-        isOpen={isPricingModalOpen}
+        open={isPricingModalOpen}
         onClose={() => {
           setIsPricingModalOpen(false);
           setPricingItem(null);
         }}
-        item={pricingItem}
+        item={pricingItem || { title: "" }}
+        onApply={(price) => {
+          // TODO: Apply price to item
+          console.log("Apply price:", price);
+          setIsPricingModalOpen(false);
+          setPricingItem(null);
+        }}
       />
     </div>
   );
