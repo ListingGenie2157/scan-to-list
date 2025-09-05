@@ -136,6 +136,7 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
   try {
     let suggestedPrice: number | undefined;
     // First try eBay pricing if we have an ISBN or at least a title for the query.
+    // First try eBay pricing if we have an ISBN or at least a title for the query.
     try {
       const body: any = {};
       if (meta.isbn13) body.isbn = meta.isbn13;
@@ -154,6 +155,10 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
           console.warn('eBay pricing error:', pricingErr);
         }
       }
+    } catch (e) {
+      console.warn('Pricing lookup error:', e);
+    }
+
     // If we still don't have a price, fall back to OpenAI/heuristic generator
     if (typeof suggestedPrice !== 'number') {
       const { data, error } = await supabase.functions.invoke('generate-price', {

@@ -792,12 +792,18 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       />
 
       <EbayPricingModal
-        isOpen={isPricingModalOpen}
+        open={isPricingModalOpen}
         onClose={() => {
           setIsPricingModalOpen(false);
           setPricingItem(null);
         }}
-        item={pricingItem}
+        item={pricingItem || { title: "" }}
+        onApply={(price) => {
+          // TODO: Apply price to item
+          console.log("Apply price:", price);
+          setIsPricingModalOpen(false);
+          setPricingItem(null);
+        }}
       />
     </div>
   );
