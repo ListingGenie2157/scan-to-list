@@ -269,7 +269,7 @@ Return as JSON only, no other text.`;
       })
       .eq('photo_id', photoId)
       .select()
-      .single();
+      .maybeSingle();
 
     if (inventoryError) {
       console.error('❌ Database error:', inventoryError);
