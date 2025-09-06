@@ -106,6 +106,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     if (!OPENAI_API_KEY) {
+      console.log("OPENAI_API_KEY missing - using fallback data");
       // Soft-fail: mark item for manual review, return 200 so the client doesn't see a random non-2xx
       const fallback = {
         title: "API Key Missing - Manual Review Needed",
@@ -116,25 +117,25 @@ serve(async (req) => {
         ocr_quality: "failed",
       };
       
-      // 1) Try to get user_id from photo; don't crash if not found
+      // 1) Try to get user_id and item_id from photo
       const { data: photoRecord } = await supabase
         .from("photos")
-        .select("user_id")
+        .select("user_id, item_id")
         .eq("id", photoId)
-        .maybeSingle(); // tolerate 0 rows
+        .maybeSingle();
 
-      // 2) Fallback: pull user_id from the caller's session
       let userId = photoRecord?.user_id ?? null;
       if (!userId) {
         const { data: me } = await supabase.auth.getUser();
         userId = me?.user?.id ?? null;
       }
       if (!userId) {
-        // Do NOT write ghost rows; tell the client to sign in
         return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
       }
 
-      // 3) Upsert by (user_id, photo_id) so you always hit the same row for this user
+      console.log(`Processing photo ${photoId} for user ${userId}, existing item_id: ${photoRecord?.item_id}`);
+
+      // 2) Upsert inventory_items
       const { data: inventoryItem, error: upErr } = await supabase
         .from("inventory_items")
         .upsert(
@@ -151,6 +152,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (upErr) {
+        console.error("inventory_items upsert failed:", upErr.message);
         return json(200, {
           success: false,
           error: "DB upsert failed",
@@ -158,7 +160,63 @@ serve(async (req) => {
         });
       }
 
-      return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: "OPENAI_API_KEY missing" });
+      // 3) Sync to items table
+      let itemId = photoRecord?.item_id;
+      const itemData = {
+        user_id: userId,
+        title: fallback.title,
+        type: "book",
+        status: "draft",
+        suggested_price: fallback.suggested_price,
+        authors: null,
+        year: null,
+        isbn13: null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (itemId) {
+        // Update existing item
+        const { error: itemUpdateErr } = await supabase
+          .from("items")
+          .update(itemData)
+          .eq("id", itemId)
+          .eq("user_id", userId);
+        
+        if (itemUpdateErr) {
+          console.error("items update failed:", itemUpdateErr.message);
+        } else {
+          console.log(`Updated existing item ${itemId}`);
+        }
+      } else {
+        // Create new item and link photo
+        const { data: newItem, error: itemInsertErr } = await supabase
+          .from("items")
+          .insert(itemData)
+          .select("id")
+          .maybeSingle();
+
+        if (itemInsertErr) {
+          console.error("items insert failed:", itemInsertErr.message);
+        } else if (newItem) {
+          itemId = newItem.id;
+          console.log(`Created new item ${itemId}`);
+          
+          // Link photo to new item
+          const { error: photoUpdateErr } = await supabase
+            .from("photos")
+            .update({ item_id: itemId })
+            .eq("id", photoId)
+            .eq("user_id", userId);
+            
+          if (photoUpdateErr) {
+            console.error("photo item_id update failed:", photoUpdateErr.message);
+          } else {
+            console.log(`Linked photo ${photoId} to item ${itemId}`);
+          }
+        }
+      }
+
+      return json(200, { success: true, inventoryItem, extractedInfo: fallback, itemId, message: "OPENAI_API_KEY missing" });
     }
 
     // Call OpenAI Vision
@@ -195,6 +253,8 @@ serve(async (req) => {
 
     if (!resp || !resp.ok) {
       const errText = resp ? await resp.text() : "no response";
+      console.log("OpenAI API call failed:", errText);
+      
       // Soft-fail with DB update so your UI gets a 200 and a reason
       const fallback = {
         title: "OCR Processing Failed - Manual Review Needed",
@@ -205,25 +265,25 @@ serve(async (req) => {
         ocr_quality: "failed",
       };
       
-      // 1) Try to get user_id from photo; don't crash if not found
+      // 1) Try to get user_id and item_id from photo
       const { data: photoRecord } = await supabase
         .from("photos")
-        .select("user_id")
+        .select("user_id, item_id")
         .eq("id", photoId)
-        .maybeSingle(); // tolerate 0 rows
+        .maybeSingle();
 
-      // 2) Fallback: pull user_id from the caller's session
       let userId = photoRecord?.user_id ?? null;
       if (!userId) {
         const { data: me } = await supabase.auth.getUser();
         userId = me?.user?.id ?? null;
       }
       if (!userId) {
-        // Do NOT write ghost rows; tell the client to sign in
         return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
       }
 
-      // 3) Upsert by (user_id, photo_id) so you always hit the same row for this user
+      console.log(`Processing failed photo ${photoId} for user ${userId}, existing item_id: ${photoRecord?.item_id}`);
+
+      // 2) Upsert inventory_items
       const { data: inventoryItem, error: upErr } = await supabase
         .from("inventory_items")
         .upsert(
@@ -241,6 +301,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (upErr) {
+        console.error("inventory_items upsert failed:", upErr.message);
         return json(200, {
           success: false,
           error: "DB upsert failed",
@@ -248,7 +309,63 @@ serve(async (req) => {
         });
       }
 
-      return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: `OCR failed: ${errText}` });
+      // 3) Sync to items table
+      let itemId = photoRecord?.item_id;
+      const itemData = {
+        user_id: userId,
+        title: fallback.title,
+        type: "book",
+        status: "draft",
+        suggested_price: fallback.suggested_price,
+        authors: null,
+        year: null,
+        isbn13: null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (itemId) {
+        // Update existing item
+        const { error: itemUpdateErr } = await supabase
+          .from("items")
+          .update(itemData)
+          .eq("id", itemId)
+          .eq("user_id", userId);
+        
+        if (itemUpdateErr) {
+          console.error("items update failed:", itemUpdateErr.message);
+        } else {
+          console.log(`Updated existing item ${itemId}`);
+        }
+      } else {
+        // Create new item and link photo
+        const { data: newItem, error: itemInsertErr } = await supabase
+          .from("items")
+          .insert(itemData)
+          .select("id")
+          .maybeSingle();
+
+        if (itemInsertErr) {
+          console.error("items insert failed:", itemInsertErr.message);
+        } else if (newItem) {
+          itemId = newItem.id;
+          console.log(`Created new item ${itemId}`);
+          
+          // Link photo to new item
+          const { error: photoUpdateErr } = await supabase
+            .from("photos")
+            .update({ item_id: itemId })
+            .eq("id", photoId)
+            .eq("user_id", userId);
+            
+          if (photoUpdateErr) {
+            console.error("photo item_id update failed:", photoUpdateErr.message);
+          } else {
+            console.log(`Linked photo ${photoId} to item ${itemId}`);
+          }
+        }
+      }
+
+      return json(200, { success: true, inventoryItem, extractedInfo: fallback, itemId, message: `OCR failed: ${errText}` });
     }
 
     const body = await resp.json();
@@ -286,26 +403,27 @@ serve(async (req) => {
     } as const;
 
     const suggested_price = calculatePrice(cleaned);
+    console.log(`OCR extraction successful for photo ${photoId}, model: ${modelUsed}`);
 
-    // 1) Try to get user_id from photo; don't crash if not found
+    // 1) Try to get user_id and item_id from photo
     const { data: photoRecord } = await supabase
       .from("photos")
-      .select("user_id")
+      .select("user_id, item_id")
       .eq("id", photoId)
-      .maybeSingle(); // tolerate 0 rows
+      .maybeSingle();
 
-    // 2) Fallback: pull user_id from the caller's session
     let userId = photoRecord?.user_id ?? null;
     if (!userId) {
       const { data: me } = await supabase.auth.getUser();
       userId = me?.user?.id ?? null;
     }
     if (!userId) {
-      // Do NOT write ghost rows; tell the client to sign in
       return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
     }
 
-    // 3) Upsert by (user_id, photo_id) so you always hit the same row for this user
+    console.log(`Processing photo ${photoId} for user ${userId}, existing item_id: ${photoRecord?.item_id}`);
+
+    // 2) Upsert inventory_items
     const { data: inventoryItem, error: dbErr } = await supabase
       .from("inventory_items")
       .upsert({
@@ -325,7 +443,7 @@ serve(async (req) => {
         issue_date: cleaned.issue_date,
         series_title: cleaned.series_title,
         edition: cleaned.edition,
-        status: "photographed",
+        status: "processed",
         extracted_text: content,
         all_visible_text: cleaned.all_visible_text,
         ocr_quality: cleaned.ocr_quality,
@@ -335,16 +453,75 @@ serve(async (req) => {
         onConflict: "user_id,photo_id"
       })
       .select()
-      .maybeSingle(); // don't explode on 0 rows
+      .maybeSingle();
 
     if (dbErr) {
-      // Still return 200 with a descriptive payload so the client doesn't just see "non-2xx"
+      console.error("inventory_items upsert failed:", dbErr.message);
       return json(200, { success: false, error: "DB update failed", detail: dbErr.message, extractedInfo: cleaned });
+    }
+
+    // 3) Sync to items table - map fields according to schema
+    let itemId = photoRecord?.item_id;
+    const itemData = {
+      user_id: userId,
+      title: cleaned.title || "Untitled",
+      type: (cleaned.genre?.toLowerCase().includes("magazine")) ? "magazine" : "book",
+      status: "processed",
+      suggested_price,
+      authors: cleaned.author ? [cleaned.author] : null,
+      year: cleaned.publication_year ? String(cleaned.publication_year) : null,
+      isbn13: cleaned.isbn && cleaned.isbn.length === 13 ? cleaned.isbn : null,
+      publisher: cleaned.publisher,
+      description: cleaned.all_visible_text?.slice(0, 500) || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (itemId) {
+      // Update existing item
+      const { error: itemUpdateErr } = await supabase
+        .from("items")
+        .update(itemData)
+        .eq("id", itemId)
+        .eq("user_id", userId);
+      
+      if (itemUpdateErr) {
+        console.error("items update failed:", itemUpdateErr.message);
+      } else {
+        console.log(`Updated existing item ${itemId} with OCR data`);
+      }
+    } else {
+      // Create new item and link photo
+      const { data: newItem, error: itemInsertErr } = await supabase
+        .from("items")
+        .insert(itemData)
+        .select("id")
+        .maybeSingle();
+
+      if (itemInsertErr) {
+        console.error("items insert failed:", itemInsertErr.message);
+      } else if (newItem) {
+        itemId = newItem.id;
+        console.log(`Created new item ${itemId} with OCR data`);
+        
+        // Link photo to new item
+        const { error: photoUpdateErr } = await supabase
+          .from("photos")
+          .update({ item_id: itemId })
+          .eq("id", photoId)
+          .eq("user_id", userId);
+          
+        if (photoUpdateErr) {
+          console.error("photo item_id update failed:", photoUpdateErr.message);
+        } else {
+          console.log(`Linked photo ${photoId} to item ${itemId}`);
+        }
+      }
     }
 
     return json(200, {
       success: true,
       inventoryItem,
+      itemId,
       extractedInfo: { ...cleaned, suggested_price },
     });
   } catch (e) {
