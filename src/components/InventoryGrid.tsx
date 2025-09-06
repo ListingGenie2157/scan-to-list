@@ -607,6 +607,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="photographed">Photographed</SelectItem>
                   <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="processed">Processed</SelectItem>
                   <SelectItem value="listed">Listed</SelectItem>
