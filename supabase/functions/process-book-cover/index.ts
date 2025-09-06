@@ -115,12 +115,25 @@ serve(async (req) => {
         suggested_price: 10.0,
         ocr_quality: "failed",
       };
+      // Get user_id from photo record first
+      const { data: photoRecord } = await supabase
+        .from("photos")
+        .select("user_id")
+        .eq("id", photoId)
+        .single();
+
       const { data: inventoryItem } = await supabase
         .from("inventory_items")
-        .update({ ...fallback, processed_at: new Date().toISOString() })
-        .eq("photo_id", photoId)
+        .upsert({
+          user_id: photoRecord?.user_id,
+          photo_id: photoId,
+          ...fallback,
+          processed_at: new Date().toISOString()
+        }, {
+          onConflict: 'photo_id'
+        })
         .select()
-        .maybeSingle();
+        .single();
       return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: "OPENAI_API_KEY missing" });
     }
 
@@ -167,12 +180,26 @@ serve(async (req) => {
         suggested_price: 10.0,
         ocr_quality: "failed",
       };
+      // Get user_id from photo record first
+      const { data: photoRecord } = await supabase
+        .from("photos")
+        .select("user_id")
+        .eq("id", photoId)
+        .single();
+
       const { data: inventoryItem } = await supabase
         .from("inventory_items")
-        .update({ ...fallback, processed_at: new Date().toISOString(), ocr_error: errText.slice(0, 500) })
-        .eq("photo_id", photoId)
+        .upsert({
+          user_id: photoRecord?.user_id,
+          photo_id: photoId,
+          ...fallback,
+          processed_at: new Date().toISOString(),
+          ocr_error: errText.slice(0, 500)
+        }, {
+          onConflict: 'photo_id'
+        })
         .select()
-        .maybeSingle();
+        .single();
       return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: `OCR failed: ${errText}` });
     }
 
@@ -212,9 +239,23 @@ serve(async (req) => {
 
     const suggested_price = calculatePrice(cleaned);
 
+    // First, get the photo record to get the user_id
+    const { data: photoRecord, error: photoErr } = await supabase
+      .from("photos")
+      .select("user_id")
+      .eq("id", photoId)
+      .single();
+
+    if (photoErr || !photoRecord) {
+      return json(200, { success: false, error: "Photo not found", detail: photoErr?.message, extractedInfo: cleaned });
+    }
+
+    // Use upsert to either insert new inventory item or update existing one
     const { data: inventoryItem, error: dbErr } = await supabase
       .from("inventory_items")
-      .update({
+      .upsert({
+        user_id: photoRecord.user_id,
+        photo_id: photoId,
         title: cleaned.title,
         subtitle: cleaned.subtitle,
         author: cleaned.author,
@@ -235,10 +276,11 @@ serve(async (req) => {
         ocr_quality: cleaned.ocr_quality,
         model_used: cleaned.model_used,
         processed_at: new Date().toISOString(),
+      }, {
+        onConflict: 'photo_id'
       })
-      .eq("photo_id", photoId)
       .select()
-      .maybeSingle(); // don't 406 when no row
+      .single();
 
     if (dbErr) {
       // Still return 200 with a descriptive payload so the client doesn't just see "non-2xx"
