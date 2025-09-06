@@ -199,7 +199,7 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
             description: listingData.description,
             price: parseFloat(listingData.price),
             condition: listingData.condition,
-            categoryId: listingData.categoryId,
+            categoryId: listingData.category,
             isbn: item.isbn,
             author: item.author
           }

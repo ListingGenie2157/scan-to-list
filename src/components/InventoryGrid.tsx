@@ -288,6 +288,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           public_url: pub1.publicUrl,
           url_public: pub1.publicUrl,
           thumb_url: pub2.publicUrl,
+          user_id: user.id,
         });
 
         toast({ title: 'Photo added', description: 'Your photo was uploaded.' });

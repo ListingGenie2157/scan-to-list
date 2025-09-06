@@ -222,6 +222,7 @@ export async function storeCover(itemId: number, coverUrl: string, type: 'book' 
     public_url: pub1.publicUrl,
     url_public: pub1.publicUrl,
     thumb_url: pub2.publicUrl,
+    user_id: user.id,
   });
 }
 
