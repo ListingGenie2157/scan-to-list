@@ -193,8 +193,7 @@ serve(async (req) => {
           user_id: photoRecord?.user_id,
           photo_id: photoId,
           ...fallback,
-          processed_at: new Date().toISOString(),
-          ocr_error: errText.slice(0, 500)
+          processed_at: new Date().toISOString()
         }, {
           onConflict: 'photo_id'
         })
