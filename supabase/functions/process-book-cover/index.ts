@@ -115,25 +115,49 @@ serve(async (req) => {
         suggested_price: 10.0,
         ocr_quality: "failed",
       };
-      // Get user_id from photo record first
+      
+      // 1) Try to get user_id from photo; don't crash if not found
       const { data: photoRecord } = await supabase
         .from("photos")
         .select("user_id")
         .eq("id", photoId)
-        .single();
+        .maybeSingle(); // tolerate 0 rows
 
-      const { data: inventoryItem } = await supabase
+      // 2) Fallback: pull user_id from the caller's session
+      let userId = photoRecord?.user_id ?? null;
+      if (!userId) {
+        const { data: me } = await supabase.auth.getUser();
+        userId = me?.user?.id ?? null;
+      }
+      if (!userId) {
+        // Do NOT write ghost rows; tell the client to sign in
+        return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
+      }
+
+      // 3) Upsert by (user_id, photo_id) so you always hit the same row for this user
+      const { data: inventoryItem, error: upErr } = await supabase
         .from("inventory_items")
-        .upsert({
-          user_id: photoRecord?.user_id,
-          photo_id: photoId,
-          ...fallback,
-          processed_at: new Date().toISOString()
-        }, {
-          onConflict: 'photo_id'
-        })
+        .upsert(
+          {
+            user_id: userId,
+            photo_id: photoId,
+            ...fallback,
+            processed_at: new Date().toISOString(),
+            status: "photographed",
+          },
+          { onConflict: "user_id,photo_id" }
+        )
         .select()
-        .single();
+        .maybeSingle();
+
+      if (upErr) {
+        return json(200, {
+          success: false,
+          error: "DB upsert failed",
+          detail: upErr.message,
+        });
+      }
+
       return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: "OPENAI_API_KEY missing" });
     }
 
@@ -180,25 +204,50 @@ serve(async (req) => {
         suggested_price: 10.0,
         ocr_quality: "failed",
       };
-      // Get user_id from photo record first
+      
+      // 1) Try to get user_id from photo; don't crash if not found
       const { data: photoRecord } = await supabase
         .from("photos")
         .select("user_id")
         .eq("id", photoId)
-        .single();
+        .maybeSingle(); // tolerate 0 rows
 
-      const { data: inventoryItem } = await supabase
+      // 2) Fallback: pull user_id from the caller's session
+      let userId = photoRecord?.user_id ?? null;
+      if (!userId) {
+        const { data: me } = await supabase.auth.getUser();
+        userId = me?.user?.id ?? null;
+      }
+      if (!userId) {
+        // Do NOT write ghost rows; tell the client to sign in
+        return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
+      }
+
+      // 3) Upsert by (user_id, photo_id) so you always hit the same row for this user
+      const { data: inventoryItem, error: upErr } = await supabase
         .from("inventory_items")
-        .upsert({
-          user_id: photoRecord?.user_id,
-          photo_id: photoId,
-          ...fallback,
-          processed_at: new Date().toISOString()
-        }, {
-          onConflict: 'photo_id'
-        })
+        .upsert(
+          {
+            user_id: userId,
+            photo_id: photoId,
+            ...fallback,
+            ocr_error: errText?.slice(0, 500) ?? null,
+            processed_at: new Date().toISOString(),
+            status: "photographed",
+          },
+          { onConflict: "user_id,photo_id" }
+        )
         .select()
-        .single();
+        .maybeSingle();
+
+      if (upErr) {
+        return json(200, {
+          success: false,
+          error: "DB upsert failed",
+          detail: upErr.message,
+        });
+      }
+
       return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: `OCR failed: ${errText}` });
     }
 
@@ -238,22 +287,29 @@ serve(async (req) => {
 
     const suggested_price = calculatePrice(cleaned);
 
-    // First, get the photo record to get the user_id
-    const { data: photoRecord, error: photoErr } = await supabase
+    // 1) Try to get user_id from photo; don't crash if not found
+    const { data: photoRecord } = await supabase
       .from("photos")
       .select("user_id")
       .eq("id", photoId)
-      .single();
+      .maybeSingle(); // tolerate 0 rows
 
-    if (photoErr || !photoRecord) {
-      return json(200, { success: false, error: "Photo not found", detail: photoErr?.message, extractedInfo: cleaned });
+    // 2) Fallback: pull user_id from the caller's session
+    let userId = photoRecord?.user_id ?? null;
+    if (!userId) {
+      const { data: me } = await supabase.auth.getUser();
+      userId = me?.user?.id ?? null;
+    }
+    if (!userId) {
+      // Do NOT write ghost rows; tell the client to sign in
+      return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
     }
 
-    // Use upsert to either insert new inventory item or update existing one
+    // 3) Upsert by (user_id, photo_id) so you always hit the same row for this user
     const { data: inventoryItem, error: dbErr } = await supabase
       .from("inventory_items")
       .upsert({
-        user_id: photoRecord.user_id,
+        user_id: userId,
         photo_id: photoId,
         title: cleaned.title,
         subtitle: cleaned.subtitle,
@@ -276,10 +332,10 @@ serve(async (req) => {
         model_used: cleaned.model_used,
         processed_at: new Date().toISOString(),
       }, {
-        onConflict: 'photo_id'
+        onConflict: "user_id,photo_id"
       })
       .select()
-      .single();
+      .maybeSingle(); // don't explode on 0 rows
 
     if (dbErr) {
       // Still return 200 with a descriptive payload so the client doesn't just see "non-2xx"
