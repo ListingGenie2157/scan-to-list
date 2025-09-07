@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/components/ui/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import type { LookupMeta } from '@/lib/scanning';
 
 interface MagazineIssueModalProps {
@@ -36,9 +35,6 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
 
     setIsLoading(true);
     try {
-      // TODO: Save magazine mapping for future use once magazine_mappings table is available
-      // For now, we'll just proceed with the enhanced metadata
-
       // Enhance the metadata with user-provided details
       const enhancedTitle = issueNumber && coverMonth && coverYear 
         ? `${seriesTitle} - ${coverMonth} ${coverYear} (Issue ${issueNumber})`
@@ -54,7 +50,7 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
       onConfirm(enhancedMeta);
       onOpenChange(false);
     } catch (error) {
-      console.error('Error saving magazine mapping:', error);
+      console.error('Error saving magazine information:', error);
       toast({ title: 'Error', description: 'Failed to save magazine information', variant: 'destructive' });
     } finally {
       setIsLoading(false);
