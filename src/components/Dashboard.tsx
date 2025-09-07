@@ -420,7 +420,7 @@ export const Dashboard = () => {
                     Upload New Photos
                   </Button>
                   <Button 
-                    variant="outline" 
+                    variant="gradient" 
                     size="lg" 
                     className="h-20 flex-col"
                     onClick={() => {

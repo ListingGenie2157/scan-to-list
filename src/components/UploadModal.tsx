@@ -108,35 +108,48 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
     setShowScan(false);
 
     try {
-      const isbn13 = normalizeScan(code);
-      if (!isbn13) {
-        toast({ title: 'Invalid code', description: 'Only ISBN-13 (books) are supported.', variant: 'destructive' });
+      const normalized = normalizeScan(code);
+      let codeToUse: string | null = normalized;
+      // If normalization returns null, attempt to treat the raw digits as a UPC/product code
+      if (!normalized) {
+        const rawDigits = String(code).replace(/\D/g, '');
+        if (rawDigits.length === 12) {
+          codeToUse = rawDigits;
+        }
+      }
+      if (!codeToUse) {
+        toast({ title: 'Invalid code', description: 'Unsupported barcode. Please scan a valid ISBN-13 or UPC.', variant: 'destructive' });
         return;
       }
 
-      const meta = await lookupIsbn(isbn13);
-      if (!meta || meta.type !== 'book') {
-        toast({ title: 'Not a book or not found', description: 'No details found for this barcode', variant: 'destructive' });
+      // Lookup product info using our Supabase edge function. It will handle books, magazines and generic UPCs.
+      const meta = await lookupIsbn(codeToUse);
+      if (!meta) {
+        toast({ title: 'Not found', description: 'No details found for this code.', variant: 'destructive' });
         return;
       }
 
-      const itemId = await upsertItem(meta);
+      // Determine item type for storage based on user preference or meta.type
+      const finalItemType: 'book' | 'magazine' | 'bundle' = itemType === 'bundle' ? 'bundle' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
+      const upsertItemType: 'book' | 'magazine' = itemType === 'bundle' ? 'book' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
+
+      const itemId = await upsertItem(meta, upsertItemType);
       if (mirrorCovers && meta.coverUrl) {
         try {
-          await storeCover(itemId, meta.coverUrl);
+          await storeCover(itemId, meta.coverUrl, finalItemType);
         } catch (e) {
           console.warn('Cover mirror failed:', e);
         }
       }
 
-      toast({ title: 'Scan saved', description: `${isbn13} → ${meta.title || 'Untitled'}` });
+      toast({ title: 'Scan saved', description: `${codeToUse} → ${meta.title || 'Untitled'}` });
       onUploadSuccess?.();
       onOpenChange(false);
     } catch (err: any) {
       console.warn('lookup-product error', err);
       toast({ title: 'Lookup Error', description: 'Failed to lookup or save product', variant: 'destructive' });
     }
-  }, [onUploadSuccess, onOpenChange, toast, mirrorCovers]);
+  }, [onUploadSuccess, onOpenChange, toast, mirrorCovers, itemType]);
 
   useEffect(() => {
     if (open && autoOpenScanner) {
