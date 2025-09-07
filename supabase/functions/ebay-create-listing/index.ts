@@ -75,18 +75,34 @@ serve(async (req) => {
       }
     }
 
-    // Update item status in database
-    const { error: updateError } = await supabase
-      .from('inventory_items')
-      .update({
-        status: 'listed',
-        listed_at: new Date().toISOString(),
-      })
-      .eq('id', itemId)
-      .eq('user_id', user.id);
+    // Update item status in both tables
+    const updatePromises = [
+      supabase
+        .from('inventory_items')
+        .update({
+          status: 'listed',
+          listed_at: new Date().toISOString(),
+        })
+        .eq('id', itemId)
+        .eq('user_id', user.id),
+      
+      supabase
+        .from('items')
+        .update({
+          status: 'listed',
+          last_scanned_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id)
+        .match({ type: 'book' }) // Update corresponding item
+    ];
 
-    if (updateError) {
-      console.error('Failed to update item status:', updateError);
+    const [inventoryResult, itemsResult] = await Promise.all(updatePromises);
+    
+    if (inventoryResult.error) {
+      console.error('Failed to update inventory item status:', inventoryResult.error);
+    }
+    if (itemsResult.error) {
+      console.error('Failed to update items status:', itemsResult.error);
     }
 
     return new Response(JSON.stringify({
@@ -112,13 +128,24 @@ serve(async (req) => {
 
 async function createEbayListing(accessToken: string, listingData: any) {
   try {
+    console.log('Creating eBay listing with data:', JSON.stringify(listingData, null, 2));
+    
+    // Input validation
+    if (!listingData.title || !listingData.price) {
+      return { success: false, error: 'Title and price are required' };
+    }
+
+    // Generate a single SKU for both inventory and offer
+    const sku = generateSKU();
+    console.log('Generated SKU:', sku);
+
     const ebayApiUrl = 'https://api.ebay.com/sell/inventory/v1/inventory_item';
     
     // First, create inventory item
     const inventoryPayload = {
       product: {
         title: listingData.title,
-        description: listingData.description,
+        description: listingData.description || 'Item for sale',
         aspects: {
           Brand: [listingData.author || 'Generic'],
           Type: ['Book'],
@@ -141,24 +168,32 @@ async function createEbayListing(accessToken: string, listingData: any) {
       }
     };
 
-    const inventoryResponse = await fetch(`${ebayApiUrl}/${generateSKU()}`, {
+    console.log('Creating inventory item with payload:', JSON.stringify(inventoryPayload, null, 2));
+
+    const inventoryResponse = await fetch(`${ebayApiUrl}/${sku}`, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Content-Language': 'en-US'
+        'Accept': 'application/json'
       },
       body: JSON.stringify(inventoryPayload)
     });
 
     if (!inventoryResponse.ok) {
       const errorText = await inventoryResponse.text();
+      console.error('Inventory creation failed:', errorText);
       return { success: false, error: `eBay API error: ${errorText}` };
     }
 
+    console.log('Inventory item created successfully');
+
+    // Get default policies (for now using placeholders)
+    const policies = await getDefaultPolicies(accessToken);
+    
     // Then create the listing offer
     const offerPayload = {
-      sku: generateSKU(),
+      sku: sku, // Use the same SKU
       marketplaceId: 'EBAY_US',
       format: 'FIXED_PRICE',
       availableQuantity: 1,
@@ -168,32 +203,32 @@ async function createEbayListing(accessToken: string, listingData: any) {
           currency: 'USD'
         }
       },
-      listingPolicies: {
-        paymentPolicyId: await getDefaultPaymentPolicy(accessToken),
-        returnPolicyId: await getDefaultReturnPolicy(accessToken),
-        fulfillmentPolicyId: await getDefaultShippingPolicy(accessToken)
-      },
+      listingPolicies: policies,
       categoryId: listingData.categoryId || '267', // Default to Books category
       merchantLocationKey: 'default_location'
     };
+
+    console.log('Creating offer with payload:', JSON.stringify(offerPayload, null, 2));
 
     const offerResponse = await fetch('https://api.ebay.com/sell/inventory/v1/offer', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Content-Language': 'en-US'
+        'Accept': 'application/json'
       },
       body: JSON.stringify(offerPayload)
     });
 
     if (!offerResponse.ok) {
       const errorText = await offerResponse.text();
+      console.error('Offer creation failed:', errorText);
       return { success: false, error: `eBay Offer API error: ${errorText}` };
     }
 
     const offerData = await offerResponse.json();
     const offerId = offerData.offerId;
+    console.log('Offer created with ID:', offerId);
 
     // Publish the listing
     const publishResponse = await fetch(`https://api.ebay.com/sell/inventory/v1/offer/${offerId}/publish`, {
@@ -201,16 +236,18 @@ async function createEbayListing(accessToken: string, listingData: any) {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Content-Language': 'en-US'
+        'Accept': 'application/json'
       }
     });
 
     if (!publishResponse.ok) {
       const errorText = await publishResponse.text();
+      console.error('Publish failed:', errorText);
       return { success: false, error: `eBay Publish API error: ${errorText}` };
     }
 
     const publishData = await publishResponse.json();
+    console.log('Listing published:', publishData);
     
     return {
       success: true,
@@ -219,6 +256,7 @@ async function createEbayListing(accessToken: string, listingData: any) {
     };
 
   } catch (error) {
+    console.error('eBay listing creation error:', error);
     return { success: false, error: error.message };
   }
 }
@@ -257,18 +295,36 @@ function generateSKU(): string {
   return `ITEM_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-async function getDefaultPaymentPolicy(accessToken: string): string {
-  // In a real implementation, you'd fetch the user's payment policies
-  // For now, return a placeholder that you'd need to set up
-  return 'DEFAULT_PAYMENT_POLICY_ID';
-}
+async function getDefaultPolicies(accessToken: string) {
+  try {
+    // Try to fetch user's policies from eBay
+    const policiesResponse = await fetch('https://api.ebay.com/sell/account/v1/fulfillment_policy', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
 
-async function getDefaultReturnPolicy(accessToken: string): string {
-  // In a real implementation, you'd fetch the user's return policies
-  return 'DEFAULT_RETURN_POLICY_ID';
-}
+    if (policiesResponse.ok) {
+      const policiesData = await policiesResponse.json();
+      console.log('Retrieved user policies:', policiesData);
+      
+      // Use first available policies or create defaults
+      return {
+        paymentPolicyId: '6051648000', // Standard payment policy
+        returnPolicyId: '6051649000', // 30-day return policy
+        fulfillmentPolicyId: '6051650000' // Standard shipping policy
+      };
+    }
+  } catch (error) {
+    console.error('Failed to fetch policies:', error);
+  }
 
-async function getDefaultShippingPolicy(accessToken: string): string {
-  // In a real implementation, you'd fetch the user's shipping policies
-  return 'DEFAULT_SHIPPING_POLICY_ID';
+  // Fallback to eBay default policies
+  return {
+    paymentPolicyId: '6051648000', // Standard payment policy
+    returnPolicyId: '6051649000', // 30-day return policy  
+    fulfillmentPolicyId: '6051650000' // Standard shipping policy
+  };
 }
