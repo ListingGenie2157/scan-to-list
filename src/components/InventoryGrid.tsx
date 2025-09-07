@@ -50,6 +50,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "compact" | "list">("grid");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,8 +145,9 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                          author.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || item.status === statusFilter;
     const matchesCategory = categoryFilter === "all" || item.suggested_category === categoryFilter;
+    const matchesType = typeFilter === "all" || item.type === typeFilter;
     
-    return matchesSearch && matchesStatus && matchesCategory;
+    return matchesSearch && matchesStatus && matchesCategory && matchesType;
   });
 
   const getStatusIcon = (status: string) => {
@@ -173,9 +175,15 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   };
 
   const getCategoryIcon = (category: string) => {
-    return category === "book" ? 
-      <BookOpen className="w-4 h-4 text-muted-foreground" /> : 
-      <Calendar className="w-4 h-4 text-muted-foreground" />;
+    if (category === "book") return <BookOpen className="w-4 h-4 text-muted-foreground" />;
+    if (category === "magazine") return <Calendar className="w-4 h-4 text-muted-foreground" />;
+    return <Package className="w-4 h-4 text-muted-foreground" />;
+  };
+
+  const getTypeBadge = (type: string | null | undefined) => {
+    if (type === 'magazine') return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Magazine</Badge>;
+    if (type === 'bundle') return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Bundle</Badge>;
+    return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Book</Badge>;
   };
 
   const getGridColumns = () => {
@@ -364,7 +372,10 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   {item.title || item.suggested_category || 'Untitled'}
                 </h3>
                 <div className="flex items-center justify-between">
-                  <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
+                  <div className="flex gap-1">
+                    <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
+                    {getTypeBadge(item.type)}
+                  </div>
                   {getStatusIcon(item.status)}
                 </div>
               </div>
@@ -429,7 +440,10 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 </p>
                 
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sm">Qty: {item.quantity ?? 1}</span>
+                  <div className="flex gap-2 items-center">
+                    <span className="font-semibold text-sm">Qty: {item.quantity ?? 1}</span>
+                    {getTypeBadge(item.type)}
+                  </div>
                   <span className="text-xs text-muted-foreground">
                     {item.last_scanned_at ? `Scanned ${new Date(item.last_scanned_at).toLocaleDateString()}` : ''}
                   </span>
@@ -623,6 +637,18 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="book">Books</SelectItem>
                   <SelectItem value="magazine">Magazines</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Items</SelectItem>
+                  <SelectItem value="book">Books Only</SelectItem>
+                  <SelectItem value="magazine">Magazines Only</SelectItem>
+                  <SelectItem value="bundle">Bundles</SelectItem>
                 </SelectContent>
               </Select>
             </div>

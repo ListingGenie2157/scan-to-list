@@ -156,9 +156,24 @@ async function lookupUPCDatabase(barcode: string) {
     
     if (data.items && data.items.length > 0) {
       const item = data.items[0];
+      
+      // Enhanced magazine detection
+      const title = item.title?.toLowerCase() || '';
+      const category = item.category?.toLowerCase() || '';
+      const description = item.description?.toLowerCase() || '';
+      
+      const isMagazine = 
+        title.includes('magazine') ||
+        title.includes('issue') ||
+        title.includes('vol.') ||
+        title.includes('volume') ||
+        category.includes('magazine') ||
+        category.includes('periodical') ||
+        description.includes('magazine') ||
+        /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(title);
+      
       return {
-        // Mark UPC lookups as generic products. Clients may override to 'magazine' if desired.
-        type: 'product',
+        type: isMagazine ? 'magazine' : 'product',
         title: item.title,
         authors: null,
         publisher: item.brand,
@@ -166,7 +181,7 @@ async function lookupUPCDatabase(barcode: string) {
         isbn: null,
         description: item.description,
         categories: item.category ? [item.category] : null,
-        format: 'Magazine/Product',
+        format: isMagazine ? 'Magazine' : 'Product',
         genre: item.category,
         suggested_price: null,
       };

@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { normalizeScan, lookupIsbn, upsertItem, storeCover } from '@/lib/scanning';
 import { useScannerSettings } from '@/hooks/useScannerSettings';
+import { useItemTypeSetting } from '@/hooks/useItemTypeSetting';
 
 interface BarcodeScannerProps {
   onScanSuccess?: (data: any) => void;
@@ -21,6 +22,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   const recentSet = useRef<Map<string, number>>(new Map());
   const { toast } = useToast();
   const { mirrorCovers, setMirrorCovers } = useScannerSettings();
+  const { itemType } = useItemTypeSetting();
 
   const addLastScan = (line: string) => {
     setLastScans((prev) => [...prev.slice(-2), line]);
@@ -91,13 +93,13 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
         return;
       }
 
-      // Determine item type for cover storage (book or magazine) based on meta.type if available
-      const itemType: 'book' | 'magazine' = (meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book';
+      // Determine item type for cover storage (book or magazine) based on meta.type or user setting
+      const finalItemType: 'book' | 'magazine' = itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book');
 
-      const itemId = await upsertItem(meta);
+      const itemId = await upsertItem(meta, itemType);
       if (mirrorCovers && meta.coverUrl) {
         try {
-          await storeCover(itemId, meta.coverUrl, itemType);
+          await storeCover(itemId, meta.coverUrl, finalItemType);
         } catch (e) {
           console.warn('Cover mirror failed:', e);
         }

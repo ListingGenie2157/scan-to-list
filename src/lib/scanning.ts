@@ -67,11 +67,14 @@ export async function lookupIsbn(isbn13: string): Promise<LookupMeta> {
   return (data as any) ?? null;
 }
 
-export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number> {
+export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: 'book' | 'magazine'): Promise<number> {
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes?.user;
   if (!user) throw new Error('Not authenticated');
   const isbn = meta.isbn13!;
+
+  // Determine final type: user preference > detected type > default book
+  const finalType = userItemType || meta.type || 'book';
 
   // Try find existing
   const { data: existing, error: exErr } = await supabase
@@ -95,7 +98,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number>
         categories: meta.categories ?? null,
         cover_url_ext: meta.coverUrl ?? null,
         last_scanned_at: new Date().toISOString(),
-        type: meta.type ?? 'book',
+        type: finalType,
       })
       .eq('id', existing.id);
     if (updErr) throw updErr;
@@ -105,7 +108,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number>
       .from('items')
       .insert({
         user_id: user.id,
-        type: meta.type ?? 'book',
+        type: finalType,
         isbn13: isbn,
         title: meta.title ?? null,
         publisher: meta.publisher ?? null,
