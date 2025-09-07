@@ -84,7 +84,7 @@ Other rules:
 - If multiple distinct items: is_bundle=true and fill bundle_* and individual_titles.
 - If single item: is_bundle=false; provide standard single-item fields.
 - confidence_score in [0,1].
-- Be very careful to distinguish between magazines and books based on visual cues`;`
+- Be very careful to distinguish between magazines and books based on visual cues`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
