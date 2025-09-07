@@ -23,6 +23,7 @@ interface BatchSettings {
   autoGenerateTitle: boolean;
   autoGeneratePrice: boolean;
   skipPricing: boolean;
+  autoOptimize: boolean;
 }
 
 interface UploadModalProps {
@@ -44,7 +45,8 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
     defaultCondition: "auto", 
     autoGenerateTitle: true,
     autoGeneratePrice: true,
-    skipPricing: false
+    skipPricing: false,
+    autoOptimize: true
   });
   const [barcode, setBarcode] = useState('');
   const [showScan, setShowScan] = useState(false);
@@ -287,9 +289,12 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
             });
           } else if (ocrData?.success) {
             console.log('OCR processing successful:', ocrData);
+            const successMessage = ocrData.autoOptimized 
+              ? `Extracted and AI-optimized: ${ocrData.extractedInfo?.title || 'Title not found'}`
+              : `Extracted: ${ocrData.extractedInfo?.title || 'Title not found'}`;
             toast({
               title: "OCR Processing Complete",
-              description: `Extracted: ${ocrData.extractedInfo?.title || 'Title not found'}`,
+              description: successMessage,
             });
           } else {
             console.warn('OCR processing returned no success flag:', ocrData);

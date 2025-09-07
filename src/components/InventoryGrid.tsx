@@ -31,6 +31,7 @@ interface InventoryItem {
   isbn: string | null;
   issue_number: string | null;
   issue_date: string | null;
+  series_title: string | null;
   created_at: string;
   photos: {
     public_url: string | null;
@@ -159,13 +160,14 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             suggested_title: item.suggested_title ?? null,
             publisher: item.publisher ?? null,
             publication_year: item.publication_year ?? null,
-            condition_assessment: null,
+            condition_assessment: item.condition_assessment ?? null,
             genre: item.genre ?? null,
             isbn: item.isbn ?? null,
             issue_number: item.issue_number ?? null,
-            issue_date: null,
+            issue_date: item.issue_date ?? null,
+            series_title: item.series_title ?? null,
             created_at: item.created_at,
-            confidence_score: null,
+            confidence_score: item.confidence_score ?? null,
             photos: item.photo_id ? photosMap[item.photo_id] : null,
             type: type,
             quantity: 1,
@@ -224,6 +226,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             isbn: it.isbn13 ?? null,
             issue_number: null,
             issue_date: null,
+            series_title: null,
             created_at: it.created_at,
             confidence_score: null,
             photos: firstPhoto,
@@ -637,7 +640,15 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               </div>
               
               <p className="text-sm text-muted-foreground line-clamp-1">
-                {item.author || 'Unknown Author'}
+                {item.suggested_category === 'magazine' ? (
+                  <>
+                    {item.series_title && `${item.series_title} `}
+                    {item.issue_number && `Issue #${item.issue_number}`}
+                    {item.issue_date && ` (${item.issue_date})`}
+                  </>
+                ) : (
+                  item.author || 'Unknown Author'
+                )}
               </p>
               
               <div className="flex items-center justify-between">

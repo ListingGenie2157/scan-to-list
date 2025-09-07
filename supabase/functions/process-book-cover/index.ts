@@ -71,11 +71,20 @@ Return only JSON, matching this schema exactly (no extra keys):
   "ocr_quality": "good"|"fair"|"poor"|"failed",
   "all_visible_text": string
 }
-Rules:
+
+IMPORTANT CLASSIFICATION RULES:
+- If you see "Magazine", "Vol.", "Volume", "Issue", "No.", or monthly/quarterly dating, this is likely a MAGAZINE
+- If it has an issue number (like "#52", "Issue 12"), it's likely a MAGAZINE  
+- If it's a periodical publication (monthly, weekly, quarterly), it's a MAGAZINE
+- If it's a standalone book with chapters and ISBN, it's a BOOK
+- For magazines: extract issue_number, issue_date, and series_title carefully
+- For books: focus on title, author, ISBN, and publication details
+
+Other rules:
 - If multiple distinct items: is_bundle=true and fill bundle_* and individual_titles.
 - If single item: is_bundle=false; provide standard single-item fields.
 - confidence_score in [0,1].
-`;
+- Be very careful to distinguish between magazines and books based on visual cues`;`
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -405,6 +414,10 @@ serve(async (req) => {
     const suggested_price = calculatePrice(cleaned);
     console.log(`OCR extraction successful for photo ${photoId}, model: ${modelUsed}`);
 
+    // Check if auto-optimization is enabled in batch settings
+    const batchSettings = requestData?.batchSettings;
+    const shouldAutoOptimize = batchSettings?.autoOptimize === true;
+
     // 1) Try to get user_id and item_id from photo
     const { data: photoRecord } = await supabase
       .from("photos")
@@ -521,11 +534,62 @@ serve(async (req) => {
       }
     }
 
+    // If auto-optimization is enabled, call generate-ebay-listing
+    if (shouldAutoOptimize && inventoryItem) {
+      console.log(`Auto-optimizing item ${inventoryItem.id} after OCR completion`);
+      
+      try {
+        const { data: optimizeResult, error: optimizeError } = await supabase.functions.invoke('generate-ebay-listing', {
+          body: {
+            itemData: {
+              title: cleaned.title,
+              author: cleaned.author,
+              publisher: cleaned.publisher,
+              publication_year: cleaned.publication_year,
+              condition: cleaned.condition_assessment,
+              category: suggested_category,
+              isbn: cleaned.isbn,
+              genre: cleaned.genre,
+              issue_number: cleaned.issue_number,
+              issue_date: cleaned.issue_date
+            },
+            userId: userId
+          }
+        });
+
+        if (optimizeError) {
+          console.error('Auto-optimization failed:', optimizeError);
+        } else if (optimizeResult?.success && optimizeResult?.optimizedListing) {
+          console.log('Auto-optimization successful, updating inventory item');
+          
+          // Update inventory item with optimized data
+          const optimizeUpdatePayload: any = {
+            suggested_title: optimizeResult.optimizedListing.title,
+            description: optimizeResult.optimizedListing.description,
+          };
+
+          if (optimizeResult.optimizedListing.price) {
+            optimizeUpdatePayload.suggested_price = optimizeResult.optimizedListing.price;
+          }
+
+          await supabase
+            .from('inventory_items')
+            .update(optimizeUpdatePayload)  
+            .eq('id', inventoryItem.id);
+            
+          console.log(`Auto-optimized item ${inventoryItem.id} with AI-generated content`);
+        }
+      } catch (optimizeErr) {
+        console.error('Auto-optimization exception:', optimizeErr);
+      }
+    }
+
     return json(200, {
       success: true,
       inventoryItem,
       itemId,
       extractedInfo: { ...cleaned, suggested_price },
+      autoOptimized: shouldAutoOptimize
     });
   } catch (e) {
     // Final safety net: never leak a bare 500 without context
