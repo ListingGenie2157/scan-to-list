@@ -209,6 +209,9 @@ export type Database = {
       inventory_items: {
         Row: {
           all_visible_text: string | null
+          amazon_asin: string | null
+          amazon_match_confidence: number | null
+          amazon_title: string | null
           author: string | null
           bundle_id: string | null
           condition_assessment: string | null
@@ -247,6 +250,9 @@ export type Database = {
         }
         Insert: {
           all_visible_text?: string | null
+          amazon_asin?: string | null
+          amazon_match_confidence?: number | null
+          amazon_title?: string | null
           author?: string | null
           bundle_id?: string | null
           condition_assessment?: string | null
@@ -285,6 +291,9 @@ export type Database = {
         }
         Update: {
           all_visible_text?: string | null
+          amazon_asin?: string | null
+          amazon_match_confidence?: number | null
+          amazon_title?: string | null
           author?: string | null
           bundle_id?: string | null
           condition_assessment?: string | null

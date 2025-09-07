@@ -13,6 +13,7 @@ import { CreateListingModal } from "@/components/CreateListingModal";
 import { BulkListingModal } from "@/components/BulkListingModal";
 import { BulkEditModal } from "@/components/BulkEditModal";
 import EbayPricingModal from "@/components/EbayPricingModal";
+import { AsinMatchModal } from "@/components/AsinMatchModal";
 
 interface InventoryItem {
   id: string;
@@ -39,6 +40,10 @@ interface InventoryItem {
   type?: string | null;
   quantity?: number | null;
   last_scanned_at?: string | null;
+  // Amazon fields
+  amazon_asin?: string | null;
+  amazon_title?: string | null;
+  amazon_match_confidence?: number | null;
 }
 
 export interface InventoryGridRef {
@@ -62,6 +67,8 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [pricingItem, setPricingItem] = useState<InventoryItem | null>(null);
+  const [isAsinMatchModalOpen, setIsAsinMatchModalOpen] = useState(false);
+  const [asinMatchItem, setAsinMatchItem] = useState<InventoryItem | null>(null);
   const { toast } = useToast();
 
   useImperativeHandle(ref, () => ({
@@ -76,6 +83,61 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
   const fetchInventory = async () => {
     try {
+      // Try to fetch from inventory_items first (new table structure)
+      const { data: inventoryData, error: inventoryError } = await supabase
+        .from('inventory_items')
+        .select(`
+          id,
+          title,
+          author,
+          status,
+          suggested_category,
+          suggested_price,
+          publisher,
+          publication_year,
+          isbn,
+          created_at,
+          amazon_asin,
+          amazon_title,
+          amazon_match_confidence,
+          photo_id
+        `)
+        .eq('user_id', user?.id)
+        .in('status', ['photographed', 'processed'])
+        .order('created_at', { ascending: false });
+
+      if (!inventoryError && inventoryData && inventoryData.length > 0) {
+        // New inventory_items structure
+        const mapped = inventoryData.map((item: any) => ({
+          id: String(item.id),
+          title: item.title ?? null,
+          author: item.author ?? null,
+          status: item.status ?? 'photographed',
+          suggested_category: item.suggested_category ?? 'book',
+          suggested_price: item.suggested_price ?? null,
+          suggested_title: null,
+          publisher: item.publisher ?? null,
+          publication_year: item.publication_year ?? null,
+          condition_assessment: null,
+          genre: null,
+          isbn: item.isbn ?? null,
+          issue_number: null,
+          issue_date: null,
+          created_at: item.created_at,
+          confidence_score: null,
+          photos: null, // Will be fetched separately if needed
+          type: item.suggested_category ?? 'book',
+          quantity: 1,
+          last_scanned_at: item.created_at,
+          amazon_asin: item.amazon_asin,
+          amazon_title: item.amazon_title,
+          amazon_match_confidence: item.amazon_match_confidence,
+        }));
+        setInventory(mapped);
+        return;
+      }
+
+      // Fallback to items table (old structure)
       const { data, error } = await supabase
         .from('items')
         .select(`
@@ -127,6 +189,10 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             type: it.type ?? 'book',
             quantity: it.quantity ?? 1,
             last_scanned_at: it.last_scanned_at ?? null,
+            // Amazon fields (default to null for old items structure)
+            amazon_asin: null,
+            amazon_title: null,
+            amazon_match_confidence: null,
           } as any;
         });
         setInventory(mapped);
@@ -261,6 +327,11 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const handleGetPricing = (item: InventoryItem) => {
     setPricingItem(item);
     setIsPricingModalOpen(true);
+  };
+
+  const handleAsinMatch = (item: InventoryItem) => {
+    setAsinMatchItem(item);
+    setIsAsinMatchModalOpen(true);
   };
 
   const handleAddPhoto = async (itemId: string) => {
@@ -528,7 +599,14 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               </p>
               
               <div className="flex items-center justify-between">
-                <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
+                <div className="flex items-center gap-1">
+                  <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
+                  {(item as any).amazon_asin && (
+                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs">
+                      ASIN
+                    </Badge>
+                  )}
+                </div>
                 <div className="flex items-center gap-1">
                   {getStatusIcon(item.status)}
                   {getStatusBadge(item.status)}
@@ -577,18 +655,29 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   <DollarSign className="w-4 h-4 mr-1" /> eBay Pricing
                 </Button>
                 <Button 
-                  variant="default" 
+                  variant="outline" 
                   size="sm" 
-                  className="flex-1"
+                  className="flex-1 text-xs"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setSelectedItem(item);
-                    setIsCreateListingModalOpen(true);
+                    handleAsinMatch(item);
                   }}
                 >
-                  Create Listing
+                  Match ASIN
                 </Button>
               </div>
+              <Button 
+                variant="default" 
+                size="sm" 
+                className="w-full"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedItem(item);
+                  setIsCreateListingModalOpen(true);
+                }}
+              >
+                List on eBay
+              </Button>
             </div>
           </div>
         </CardContent>
@@ -831,6 +920,18 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           console.log("Apply price:", price);
           setIsPricingModalOpen(false);
           setPricingItem(null);
+        }}
+      />
+
+      <AsinMatchModal
+        item={asinMatchItem}
+        isOpen={isAsinMatchModalOpen}
+        onClose={() => {
+          setIsAsinMatchModalOpen(false);
+          setAsinMatchItem(null);
+        }}
+        onSuccess={() => {
+          fetchInventory(); // Refresh to show ASIN badge
         }}
       />
     </div>

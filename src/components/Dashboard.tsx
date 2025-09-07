@@ -11,7 +11,7 @@ import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
 import { ConnectEbayButton } from "./ConnectEbayButton";
-import { MarketplaceToggle } from "./MarketplaceToggle";
+
 import { AutoListingSettings } from "./AutoListingSettings";
 import { ListingApprovalsPage } from "./ListingApprovalsPage";
 import { Navigate } from "react-router-dom";
@@ -207,35 +207,32 @@ export const Dashboard = () => {
       </header>
 
       <div className="container mx-auto px-4 py-6">
-        {/* Navigation Tabs and Marketplace Toggle */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex gap-2">
-            <Button
-              variant={activeTab === "overview" ? "default" : "ghost"}
-              onClick={() => setActiveTab("overview")}
-            >
-              Overview
-            </Button>
-            <Button
-              variant={activeTab === "inventory" ? "default" : "ghost"}
-              onClick={() => setActiveTab("inventory")}
-            >
-              Inventory
-            </Button>
-            <Button
-              variant={activeTab === "auto-listing" ? "default" : "ghost"}
-              onClick={() => setActiveTab("auto-listing")}
-            >
-              Auto-Listing
-            </Button>
-            <Button
-              variant={activeTab === "approvals" ? "default" : "ghost"}
-              onClick={() => setActiveTab("approvals")}
-            >
-              Approvals
-            </Button>
-          </div>
-          <MarketplaceToggle />
+        {/* Navigation Tabs */}
+        <div className="flex gap-2 mb-6">
+          <Button
+            variant={activeTab === "overview" ? "default" : "ghost"}
+            onClick={() => setActiveTab("overview")}
+          >
+            Overview
+          </Button>
+          <Button
+            variant={activeTab === "inventory" ? "default" : "ghost"}
+            onClick={() => setActiveTab("inventory")}
+          >
+            Inventory
+          </Button>
+          <Button
+            variant={activeTab === "auto-listing" ? "default" : "ghost"}
+            onClick={() => setActiveTab("auto-listing")}
+          >
+            Auto-Listing
+          </Button>
+          <Button
+            variant={activeTab === "approvals" ? "default" : "ghost"}
+            onClick={() => setActiveTab("approvals")}
+          >
+            Approvals
+          </Button>
         </div>
 
         {activeTab === "overview" ? (

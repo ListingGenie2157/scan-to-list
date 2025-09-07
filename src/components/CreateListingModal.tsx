@@ -301,11 +301,13 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
         setEbayTokenValid(false);
         setShowEbayAuth(true);
       } else {
+        const errorMessage = error.message || "Failed to create eBay listing. Please try again.";
         toast({
           title: "Listing Creation Failed",
-          description: error.message || "Failed to create eBay listing. Please try again.",
+          description: `${errorMessage} Check the function logs for details.`,
           variant: "destructive",
         });
+        console.error('eBay listing creation error details:', error);
       }
     } finally {
       setIsGeneratingListing(false);
@@ -318,9 +320,9 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create Listing</DialogTitle>
+          <DialogTitle>Create eBay Listing</DialogTitle>
           <DialogDescription>
-            Create a marketplace listing for this item with customizable details and pricing.
+            Create an eBay listing for this item with optimized details and pricing.
           </DialogDescription>
         </DialogHeader>
         
@@ -475,7 +477,7 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
                 ) : (
                   <>
                     <DollarSign className="w-4 h-4 mr-2" />
-                    Create Listing
+                    List on eBay
                   </>
                 )}
               </Button>
