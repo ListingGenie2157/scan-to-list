@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { normalizeScan, lookupIsbn, upsertItem, storeCover } from '@/lib/scanning';
 import { useScannerSettings } from '@/hooks/useScannerSettings';
 import { useItemTypeSetting } from '@/hooks/useItemTypeSetting';
+import { MagazineIssueModal } from '@/components/MagazineIssueModal';
 
 interface BarcodeScannerProps {
   onScanSuccess?: (data: any) => void;
@@ -19,6 +20,8 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   const [showWebScanner, setShowWebScanner] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [lastScans, setLastScans] = useState<string[]>([]);
+  const [showMagazineModal, setShowMagazineModal] = useState(false);
+  const [pendingMagazineMeta, setPendingMagazineMeta] = useState<any>(null);
   const recentSet = useRef<Map<string, number>>(new Map());
   const { toast } = useToast();
   const { mirrorCovers, setMirrorCovers } = useScannerSettings();
@@ -93,6 +96,23 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
         return;
       }
 
+      // Check if this is a magazine that needs disambiguation
+      if (meta.type === 'magazine' && meta.barcode && (!meta.title || meta.title.toLowerCase().includes('magazine'))) {
+        // Show magazine issue modal for generic magazine results
+        setPendingMagazineMeta(meta);
+        setShowMagazineModal(true);
+        return;
+      }
+
+      await completeSave(meta);
+    } catch (error) {
+      console.error('Barcode processing error:', error);
+      toast({ title: 'Error', description: 'Failed to process barcode', variant: 'destructive' });
+    }
+  };
+
+  const completeSave = async (meta: any) => {
+    try {
       // Determine item type for cover storage based on meta.type or user setting
       const finalItemType: 'book' | 'magazine' | 'bundle' = itemType === 'bundle' ? 'bundle' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
       const upsertItemType: 'book' | 'magazine' = itemType === 'bundle' ? 'book' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
@@ -106,7 +126,8 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
         }
       }
 
-      toast({ title: 'Saved', description: `Saved ${codeToUse} – ${meta.title || 'Untitled'}` });
+      const displayCode = meta.barcode || meta.isbn13 || 'Unknown';
+      toast({ title: 'Saved', description: `Saved ${displayCode} – ${meta.title || 'Untitled'}` });
       onScanSuccess?.(meta);
     } catch (error) {
       console.error('Barcode processing error:', error);
@@ -137,6 +158,15 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
           onClose={() => setShowWebScanner(false)}
           continuous={batchMode}
           overlayLines={lastScans}
+        />
+      )}
+
+      {showMagazineModal && pendingMagazineMeta && (
+        <MagazineIssueModal
+          open={showMagazineModal}
+          onOpenChange={setShowMagazineModal}
+          meta={pendingMagazineMeta}
+          onConfirm={completeSave}
         />
       )}
     </>
