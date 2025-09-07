@@ -188,7 +188,7 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
 }
 
 
-export async function storeCover(itemId: number, coverUrl: string, type: 'book' | 'magazine' = 'book'): Promise<void> {
+export async function storeCover(itemId: number, coverUrl: string, type: 'book' | 'magazine' | 'bundle' = 'book'): Promise<void> {
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes?.user;
   if (!user) throw new Error('Not authenticated');

@@ -11,6 +11,7 @@ import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
 import { ConnectEbayButton } from "./ConnectEbayButton";
+import { MarketplaceToggle } from "./MarketplaceToggle";
 import { Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
@@ -204,20 +205,23 @@ export const Dashboard = () => {
       </header>
 
       <div className="container mx-auto px-4 py-6">
-        {/* Navigation Tabs */}
-        <div className="flex gap-2 mb-6">
-          <Button
-            variant={activeTab === "overview" ? "default" : "ghost"}
-            onClick={() => setActiveTab("overview")}
-          >
-            Overview
-          </Button>
-          <Button
-            variant={activeTab === "inventory" ? "default" : "ghost"}
-            onClick={() => setActiveTab("inventory")}
-          >
-            Inventory
-          </Button>
+        {/* Navigation Tabs and Marketplace Toggle */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex gap-2">
+            <Button
+              variant={activeTab === "overview" ? "default" : "ghost"}
+              onClick={() => setActiveTab("overview")}
+            >
+              Overview
+            </Button>
+            <Button
+              variant={activeTab === "inventory" ? "default" : "ghost"}
+              onClick={() => setActiveTab("inventory")}
+            >
+              Inventory
+            </Button>
+          </div>
+          <MarketplaceToggle />
         </div>
 
         {activeTab === "overview" ? (

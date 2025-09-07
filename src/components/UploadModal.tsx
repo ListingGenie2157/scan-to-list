@@ -190,7 +190,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
         setProcessingProgress(Math.round((i / totalFiles) * 90));
         
         // Upload to storage
-        const baseFolder = itemType === 'magazine' ? 'magazine' : 'book';
+        const baseFolder = itemType === 'magazine' ? 'magazine' : itemType === 'bundle' ? 'bundle' : 'book';
         const fileName = `${user.id}/${baseFolder}/${Date.now()}-${file.name}`;
         console.log('Uploading to storage:', fileName);
         
@@ -412,13 +412,14 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
             <div className="mt-3 flex items-center justify-center gap-4 flex-wrap">
               <div className="flex items-center gap-2">
                 <Label className="text-sm">Item Type</Label>
-                <Select value={itemType} onValueChange={(v) => setItemType(v as 'book' | 'magazine')}>
+                <Select value={itemType} onValueChange={(v) => setItemType(v as 'book' | 'magazine' | 'bundle')}>
                   <SelectTrigger className="w-40 bg-background">
                     <SelectValue placeholder="Item Type" />
                   </SelectTrigger>
                   <SelectContent className="z-[60] bg-popover">
                     <SelectItem value="book">Book</SelectItem>
                     <SelectItem value="magazine">Magazine</SelectItem>
+                    <SelectItem value="bundle">Bundle</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

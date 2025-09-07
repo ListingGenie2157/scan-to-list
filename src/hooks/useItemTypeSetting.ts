@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-type ItemType = 'book' | 'magazine';
+type ItemType = 'book' | 'magazine' | 'bundle';
 
 const KEY = 'defaultItemType';
 
@@ -10,7 +10,7 @@ export function useItemTypeSetting() {
   useEffect(() => {
     try {
       const v = localStorage.getItem(KEY) as ItemType | null;
-      if (v === 'book' || v === 'magazine') setItemType(v);
+      if (v === 'book' || v === 'magazine' || v === 'bundle') setItemType(v);
     } catch {}
   }, []);
 

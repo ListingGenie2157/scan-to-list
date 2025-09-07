@@ -93,10 +93,11 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
         return;
       }
 
-      // Determine item type for cover storage (book or magazine) based on meta.type or user setting
-      const finalItemType: 'book' | 'magazine' = itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book');
+      // Determine item type for cover storage based on meta.type or user setting
+      const finalItemType: 'book' | 'magazine' | 'bundle' = itemType === 'bundle' ? 'bundle' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
+      const upsertItemType: 'book' | 'magazine' = itemType === 'bundle' ? 'book' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
 
-      const itemId = await upsertItem(meta, itemType);
+      const itemId = await upsertItem(meta, upsertItemType);
       if (mirrorCovers && meta.coverUrl) {
         try {
           await storeCover(itemId, meta.coverUrl, finalItemType);
