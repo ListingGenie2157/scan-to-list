@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Filter, Package, Clock, CheckCircle, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2, Plus, DollarSign } from "lucide-react";
+import { Search, Filter, Package, Clock, CheckCircle, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2, Plus, DollarSign, Edit, ExternalLink, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
@@ -14,6 +14,7 @@ import { BulkListingModal } from "@/components/BulkListingModal";
 import { BulkEditModal } from "@/components/BulkEditModal";
 import EbayPricingModal from "@/components/EbayPricingModal";
 import { AsinMatchModal } from "@/components/AsinMatchModal";
+import { ItemEditModal } from "@/components/ItemEditModal";
 
 interface InventoryItem {
   id: string;
@@ -69,6 +70,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [pricingItem, setPricingItem] = useState<InventoryItem | null>(null);
   const [isAsinMatchModalOpen, setIsAsinMatchModalOpen] = useState(false);
   const [asinMatchItem, setAsinMatchItem] = useState<InventoryItem | null>(null);
+  const [editModalItem, setEditModalItem] = useState<InventoryItem | null>(null);
   const { toast } = useToast();
 
   useImperativeHandle(ref, () => ({
@@ -643,9 +645,9 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                    <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
                    {getTypeBadge(item.type)}
                    {(item as any).amazon_asin && (
-                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs">
-                       ASIN: {(item as any).amazon_asin}
-                     </Badge>
+                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs">
+                      ASIN
+                    </Badge>
                    )}
                  </div>
                 <div className="flex items-center gap-1">
@@ -667,46 +669,25 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   variant="outline" 
                   size="sm" 
                   className="flex-1 min-w-0"
-                  onClick={(e) => { e.stopPropagation(); /* TODO: Implement edit */ }}
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setEditModalItem(item);
+                  }}
                 >
-                  Edit
+                  <Settings className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Edit
                 </Button>
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="flex-1 min-w-0 text-xs sm:text-sm"
+                  className="flex-1 min-w-0"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleAddPhoto(item.id);
+                    handleAsinMatch(item);
                   }}
+                  title="Link this item to its Amazon product page (optional)"
                 >
-                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Add Photo
+                  <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Amazon
                 </Button>
-              </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleGetPricing(item);
-                  }}
-                >
-                  <DollarSign className="w-4 h-4 mr-1" /> eBay Pricing
-                </Button>
-                 <Button 
-                   variant="outline" 
-                   size="sm" 
-                   className="flex-1 text-xs"
-                   onClick={(e) => {
-                     e.stopPropagation();
-                     handleAsinMatch(item);
-                   }}
-                   title="Link this item to its Amazon product page (optional)"
-                 >
-                   Match Amazon ASIN
-                 </Button>
               </div>
                <Button 
                  variant="outline" 
@@ -718,7 +699,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                    setIsCreateListingModalOpen(true);
                  }}
                >
-                 List on eBay
+                <Package className="w-4 h-4 mr-1" /> List on eBay
                </Button>
             </div>
           </div>
@@ -965,7 +946,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
         }}
       />
 
-      <AsinMatchModal
+      <AsinMatchModal 
         item={asinMatchItem}
         isOpen={isAsinMatchModalOpen}
         onClose={() => {
@@ -974,6 +955,20 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
         }}
         onSuccess={() => {
           fetchInventory(); // Refresh to show ASIN badge
+        }}
+      />
+
+      <ItemEditModal 
+        open={editModalItem !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditModalItem(null);
+          }
+        }}
+        item={editModalItem}
+        onSave={(updatedItem) => {
+          setEditModalItem(null);
+          fetchInventory();
         }}
       />
     </div>

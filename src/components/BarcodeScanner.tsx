@@ -142,13 +142,15 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
           <Camera className="w-4 h-4 mr-2" />
           {batchMode ? 'Start Batch Scan' : 'Scan Barcode'}
         </Button>
-        <div className="flex items-center gap-2">
-          <Switch id="batch-scan" checked={batchMode} onCheckedChange={setBatchMode} />
-          <Label htmlFor="batch-scan">Batch Scan</Label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch id="mirror-covers" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
-          <Label htmlFor="mirror-covers">Mirror external covers to storage</Label>
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <div className="flex items-center space-x-2">
+            <Switch id="batch-scan" checked={batchMode} onCheckedChange={setBatchMode} />
+            <Label htmlFor="batch-scan">Batch Scan (keep scanner open)</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Switch id="mirror-covers" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
+            <Label htmlFor="mirror-covers">Auto-populate book covers</Label>
+          </div>
         </div>
       </div>
 
