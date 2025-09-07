@@ -250,7 +250,8 @@ export const TitlePreferencesModal = ({ isOpen, onClose }: TitlePreferencesModal
                   className="mt-2"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  This text will be included in every AI-generated title
+                  This text will be included in every AI-generated title. 
+                  Tip: Add "FREE SHIPPING" to suffixes to include it in every listing.
                 </p>
               </div>
             </TabsContent>

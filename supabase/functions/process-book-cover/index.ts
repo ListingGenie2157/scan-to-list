@@ -423,7 +423,9 @@ serve(async (req) => {
 
     console.log(`Processing photo ${photoId} for user ${userId}, existing item_id: ${photoRecord?.item_id}`);
 
-    // 2) Upsert inventory_items
+    // 2) Upsert inventory_items with proper category classification
+    const suggested_category = (cleaned.genre?.toLowerCase().includes("magazine") || cleaned.issue_number) ? "magazine" : "book";
+    
     const { data: inventoryItem, error: dbErr } = await supabase
       .from("inventory_items")
       .upsert({
@@ -438,6 +440,7 @@ serve(async (req) => {
         genre: cleaned.genre,
         condition_assessment: cleaned.condition_assessment,
         suggested_price,
+        suggested_category,
         confidence_score: cleaned.confidence_score,
         issue_number: cleaned.issue_number,
         issue_date: cleaned.issue_date,

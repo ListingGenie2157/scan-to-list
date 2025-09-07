@@ -148,7 +148,7 @@ async function createEbayListing(accessToken: string, listingData: any) {
         description: listingData.description || 'Item for sale',
         aspects: {
           Brand: [listingData.author || 'Generic'],
-          Type: ['Book'],
+          Type: [listingData.categoryId === '280' ? 'Magazine' : 'Book'],
           ...(listingData.isbn && { ISBN: [listingData.isbn] }),
           ...(listingData.condition && { Condition: [listingData.condition] }),
         }
@@ -175,7 +175,8 @@ async function createEbayListing(accessToken: string, listingData: any) {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US'
       },
       body: JSON.stringify(inventoryPayload)
     });
@@ -215,7 +216,8 @@ async function createEbayListing(accessToken: string, listingData: any) {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US'
       },
       body: JSON.stringify(offerPayload)
     });
@@ -236,7 +238,8 @@ async function createEbayListing(accessToken: string, listingData: any) {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US'
       }
     });
 
@@ -302,7 +305,8 @@ async function getDefaultPolicies(accessToken: string) {
       headers: {
         'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Accept-Language': 'en-US'
       }
     });
 

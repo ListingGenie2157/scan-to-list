@@ -100,7 +100,11 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           amazon_asin,
           amazon_title,
           amazon_match_confidence,
-          photo_id
+          photo_id,
+          genre,
+          series_title,
+          issue_number,
+          suggested_title
         `)
         .eq('user_id', user?.id)
         .in('status', ['photographed', 'processed'])
@@ -108,31 +112,67 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
       if (!inventoryError && inventoryData && inventoryData.length > 0) {
         // New inventory_items structure
-        const mapped = inventoryData.map((item: any) => ({
-          id: String(item.id),
-          title: item.title ?? null,
-          author: item.author ?? null,
-          status: item.status ?? 'photographed',
-          suggested_category: item.suggested_category ?? 'book',
-          suggested_price: item.suggested_price ?? null,
-          suggested_title: null,
-          publisher: item.publisher ?? null,
-          publication_year: item.publication_year ?? null,
-          condition_assessment: null,
-          genre: null,
-          isbn: item.isbn ?? null,
-          issue_number: null,
-          issue_date: null,
-          created_at: item.created_at,
-          confidence_score: null,
-          photos: null, // Will be fetched separately if needed
-          type: item.suggested_category ?? 'book',
-          quantity: 1,
-          last_scanned_at: item.created_at,
-          amazon_asin: item.amazon_asin,
-          amazon_title: item.amazon_title,
-          amazon_match_confidence: item.amazon_match_confidence,
-        }));
+        const photoIds = inventoryData.map(item => item.photo_id).filter(Boolean);
+        
+        // Fetch photos for all items at once
+        let photosMap: Record<string, any> = {};
+        if (photoIds.length > 0) {
+          const { data: photosData } = await supabase
+            .from('photos')
+            .select('id, public_url, thumb_url, url_public')
+            .in('id', photoIds);
+          
+          photosMap = photosData?.reduce((acc, photo) => {
+            acc[photo.id] = {
+              public_url: photo.public_url || photo.url_public,
+              thumb_url: photo.thumb_url
+            };
+            return acc;
+          }, {}) || {};
+        }
+
+        const mapped = inventoryData.map((item: any) => {
+          // Determine category/type
+          let category = item.suggested_category;
+          let type = item.suggested_category;
+          
+          // Auto-classify if not set
+          if (!category) {
+            if (item.genre?.toLowerCase().includes('magazine') || item.issue_number) {
+              category = 'magazine';
+              type = 'magazine';
+            } else {
+              category = 'book';
+              type = 'book';
+            }
+          }
+
+          return {
+            id: String(item.id),
+            title: item.title ?? null,
+            author: item.author ?? null,
+            status: item.status ?? 'photographed',
+            suggested_category: category,
+            suggested_price: item.suggested_price ?? null,
+            suggested_title: item.suggested_title ?? null,
+            publisher: item.publisher ?? null,
+            publication_year: item.publication_year ?? null,
+            condition_assessment: null,
+            genre: item.genre ?? null,
+            isbn: item.isbn ?? null,
+            issue_number: item.issue_number ?? null,
+            issue_date: null,
+            created_at: item.created_at,
+            confidence_score: null,
+            photos: item.photo_id ? photosMap[item.photo_id] : null,
+            type: type,
+            quantity: 1,
+            last_scanned_at: item.created_at,
+            amazon_asin: item.amazon_asin,
+            amazon_title: item.amazon_title,
+            amazon_match_confidence: item.amazon_match_confidence,
+          };
+        });
         setInventory(mapped);
         return;
       }
@@ -453,7 +493,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               
               {/* Compact Actions */}
               <Button 
-                variant="default" 
+                variant="outline" 
                 size="sm" 
                 className="w-full text-xs"
                 onClick={() => {
@@ -461,7 +501,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   setIsCreateListingModalOpen(true);
                 }}
               >
-                List
+                List on eBay
               </Button>
             </div>
           </CardContent>
@@ -534,7 +574,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   Edit
                 </Button>
                 <Button 
-                  variant="default" 
+                  variant="outline" 
                   size="sm" 
                   className="text-xs"
                   onClick={() => {
@@ -542,7 +582,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                     setIsCreateListingModalOpen(true);
                   }}
                 >
-                  List
+                  List on eBay
                 </Button>
               </div>
             </div>
@@ -599,14 +639,15 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               </p>
               
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
-                  {(item as any).amazon_asin && (
-                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs">
-                      ASIN
-                    </Badge>
-                  )}
-                </div>
+                 <div className="flex items-center gap-1">
+                   <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
+                   {getTypeBadge(item.type)}
+                   {(item as any).amazon_asin && (
+                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs">
+                       ASIN: {(item as any).amazon_asin}
+                     </Badge>
+                   )}
+                 </div>
                 <div className="flex items-center gap-1">
                   {getStatusIcon(item.status)}
                   {getStatusBadge(item.status)}
@@ -654,30 +695,31 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 >
                   <DollarSign className="w-4 h-4 mr-1" /> eBay Pricing
                 </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1 text-xs"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAsinMatch(item);
-                  }}
-                >
-                  Match ASIN
-                </Button>
+                 <Button 
+                   variant="outline" 
+                   size="sm" 
+                   className="flex-1 text-xs"
+                   onClick={(e) => {
+                     e.stopPropagation();
+                     handleAsinMatch(item);
+                   }}
+                   title="Link this item to its Amazon product page (optional)"
+                 >
+                   Match Amazon ASIN
+                 </Button>
               </div>
-              <Button 
-                variant="default" 
-                size="sm" 
-                className="w-full"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedItem(item);
-                  setIsCreateListingModalOpen(true);
-                }}
-              >
-                List on eBay
-              </Button>
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+                 className="w-full"
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   setSelectedItem(item);
+                   setIsCreateListingModalOpen(true);
+                 }}
+               >
+                 List on eBay
+               </Button>
             </div>
           </div>
         </CardContent>

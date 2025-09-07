@@ -153,9 +153,9 @@ export function AsinMatchModal({ item, isOpen, onClose, onSuccess }: AsinMatchMo
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Match Amazon ASIN</DialogTitle>
+          <DialogTitle>Match Amazon ASIN (Optional)</DialogTitle>
           <DialogDescription>
-            Enter the Amazon ASIN for this {item.type || 'item'} to enable Amazon integration.
+            This is optional. It links your item to its Amazon product page for better cross-platform integration.
           </DialogDescription>
         </DialogHeader>
 

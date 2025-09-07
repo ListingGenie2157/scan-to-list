@@ -301,10 +301,20 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
         setEbayTokenValid(false);
         setShowEbayAuth(true);
       } else {
-        const errorMessage = error.message || "Failed to create eBay listing. Please try again.";
+        let errorMessage = error.message || "Failed to create eBay listing. Please try again.";
+        
+        // Surface specific eBay API errors more clearly
+        if (errorMessage.includes('Accept-Language')) {
+          errorMessage = "eBay API language header issue. Please try again.";
+        } else if (errorMessage.includes('token') || errorMessage.includes('expired')) {
+          errorMessage = "eBay authentication expired. Please reconnect your eBay account.";
+        } else if (errorMessage.includes('category')) {
+          errorMessage = "Invalid eBay category. Please check the item type.";
+        }
+        
         toast({
           title: "Listing Creation Failed",
-          description: `${errorMessage} Check the function logs for details.`,
+          description: errorMessage,
           variant: "destructive",
         });
         console.error('eBay listing creation error details:', error);
@@ -371,6 +381,7 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
                   variant="ghost" 
                   size="sm"
                   onClick={() => setShowPreferences(true)}
+                  title="Set global title prefixes, suffixes, and custom text"
                 >
                   <Settings className="w-4 h-4" />
                 </Button>
@@ -380,6 +391,7 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
                   size="sm"
                   onClick={generateOptimizedListing}
                   disabled={isGeneratingListing}
+                  title="Generate SEO-optimized title and description with your preferences"
                 >
                   {isGeneratingListing ? (
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -389,6 +401,9 @@ export function CreateListingModal({ item, isOpen, onClose }: CreateListingModal
                   {isGeneratingListing ? 'Generating...' : 'AI Optimize'}
                 </Button>
               </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Title preferences (prefixes, suffixes, custom text) apply to all AI-generated titles.
+              </p>
             </div>
 
             <div className="space-y-2">
