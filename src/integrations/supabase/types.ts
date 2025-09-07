@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      auto_listing_settings: {
+        Row: {
+          created_at: string
+          daily_limit: number
+          enabled: boolean
+          id: string
+          schedule_time: string
+          timezone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_limit?: number
+          enabled?: boolean
+          id?: string
+          schedule_time?: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_limit?: number
+          enabled?: boolean
+          id?: string
+          schedule_time?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       bundles: {
         Row: {
           bundle_name: string
@@ -394,6 +427,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      listing_drafts: {
+        Row: {
+          approved_at: string | null
+          created_at: string
+          ebay_listing_id: string | null
+          id: string
+          item_id: string
+          listed_at: string | null
+          listing_data: Json
+          status: string
+          user_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          created_at?: string
+          ebay_listing_id?: string | null
+          id?: string
+          item_id: string
+          listed_at?: string | null
+          listing_data: Json
+          status?: string
+          user_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          created_at?: string
+          ebay_listing_id?: string | null
+          id?: string
+          item_id?: string
+          listed_at?: string | null
+          listing_data?: Json
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       listing_queues: {
         Row: {
