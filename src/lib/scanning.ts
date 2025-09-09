@@ -14,6 +14,10 @@ export type LookupMeta = {
   description?: string | null;
   categories?: string[] | null;
   suggested_price?: number | null;
+  // inferred fields for magazines (from EAN add-ons)
+  inferred_month?: string | null;
+  inferred_year?: string | null;
+  inferred_issue?: string | null;
 } | null;
 
 export function normalizeScan(raw: string): string | null {

@@ -16,9 +16,9 @@ interface MagazineIssueModalProps {
 
 export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: MagazineIssueModalProps) {
   const [seriesTitle, setSeriesTitle] = useState(meta.title || '');
-  const [issueNumber, setIssueNumber] = useState('');
-  const [coverMonth, setCoverMonth] = useState('');
-  const [coverYear, setCoverYear] = useState(new Date().getFullYear().toString());
+  const [issueNumber, setIssueNumber] = useState(meta.inferred_issue || '');
+  const [coverMonth, setCoverMonth] = useState(meta.inferred_month || '');
+  const [coverYear, setCoverYear] = useState(meta.inferred_year || new Date().getFullYear().toString());
   const [specialIssue, setSpecialIssue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -49,6 +49,8 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
         title: enhancedTitle,
         year: coverYear,
         type: 'magazine',
+        // Keep the addon and barcode; preserve suggested price if provided from backend
+        suggested_price: meta.suggested_price ?? meta.suggested_price ?? null,
       };
 
       onConfirm(enhancedMeta);
