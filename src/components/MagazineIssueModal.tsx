@@ -19,6 +19,7 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
   const [issueNumber, setIssueNumber] = useState('');
   const [coverMonth, setCoverMonth] = useState('');
   const [coverYear, setCoverYear] = useState(new Date().getFullYear().toString());
+  const [specialIssue, setSpecialIssue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -36,9 +37,12 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
     setIsLoading(true);
     try {
       // Enhance the metadata with user-provided details
-      const enhancedTitle = issueNumber && coverMonth && coverYear 
-        ? `${seriesTitle} - ${coverMonth} ${coverYear} (Issue ${issueNumber})`
-        : `${seriesTitle}${issueNumber ? ` - Issue ${issueNumber}` : ''}`;
+      const issueBits = [
+        issueNumber ? `Issue ${issueNumber}` : null,
+        specialIssue ? specialIssue : null,
+      ].filter(Boolean).join(' • ');
+      const dateBit = coverMonth && coverYear ? `${coverMonth} ${coverYear}` : (coverYear ? coverYear : '');
+      const enhancedTitle = [seriesTitle, dateBit, issueBits].filter(Boolean).join(' - ');
 
       const enhancedMeta: NonNullable<LookupMeta> = {
         ...meta,
@@ -87,6 +91,16 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
               value={issueNumber}
               onChange={(e) => setIssueNumber(e.target.value)}
               placeholder="e.g., 123 or Vol 45 No 3"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="special-issue">Special Issue (optional)</Label>
+            <Input
+              id="special-issue"
+              value={specialIssue}
+              onChange={(e) => setSpecialIssue(e.target.value)}
+              placeholder="e.g., Holiday Edition, Collector's Issue"
             />
           </div>
 

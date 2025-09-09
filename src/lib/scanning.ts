@@ -19,16 +19,15 @@ export type LookupMeta = {
 export function normalizeScan(raw: string): string | null {
   if (!raw) return null;
   // Remove non-digits (keep X for ISBN10 check but we'll convert to 13 anyway)
-  let s = String(raw).trim();
+  const s = String(raw).trim();
   let digits = s.replace(/[^0-9Xx]/g, "");
 
-  // EAN-13 + EAN-5 addon (18 digits) -> trim to 13
-  if (digits.length === 18 && (digits.startsWith("978") || digits.startsWith("979"))) {
-    digits = digits.slice(0, 13);
+  // Preserve EAN add-ons for downstream disambiguation (book/magazine)
+  if (digits.length === 18 && (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977"))) {
+    return digits; // EAN-13 + EAN-5 addon
   }
-  // Some scanners include spaces/plus, handled above. If pure 15 with add-on, also trim
-  if (digits.length === 15 && (digits.startsWith("978") || digits.startsWith("979"))) {
-    digits = digits.slice(0, 13);
+  if (digits.length === 15 && (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977"))) {
+    return digits; // EAN-13 + EAN-2 addon
   }
 
   // If ISBN10 -> convert to ISBN13
@@ -36,13 +35,12 @@ export function normalizeScan(raw: string): string | null {
     digits = isbn10to13(digits.toUpperCase());
   }
 
-  // Only accept EAN-13 for books
-  if (digits.length === 13 && (digits.startsWith("978") || digits.startsWith("979"))) {
+  // Accept EAN-13 (books 978/979 and magazines 977)
+  if (digits.length === 13 && (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977"))) {
     return digits;
   }
 
-  // Accept 12-digit UPC codes (e.g., magazines) by returning the digits as-is. 
-  // Caller can decide how to handle these codes (e.g., treat as product UPC).
+  // Accept 12-digit UPC codes
   if (digits.length === 12) {
     return digits;
   }
