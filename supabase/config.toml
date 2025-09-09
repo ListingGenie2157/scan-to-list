@@ -51,7 +51,7 @@ enabled = true
 [experimental.webhooks]
 enabled = true
 [functions.process-book-cover]
-verify_jwt = false
+verify_jwt = true
 
 [functions.ebay-account-deletion]
 verify_jwt = false
@@ -67,6 +67,18 @@ enabled = true
 verify_jwt = true
 
 [functions.delete-items]
+enabled = true
+verify_jwt = true
+
+[functions.mirror-cover]
+enabled = true
+verify_jwt = true
+
+[functions.oauth-health]
+enabled = true
+verify_jwt = true
+
+[functions.inventory-health]
 enabled = true
 verify_jwt = true
 

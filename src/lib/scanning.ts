@@ -271,44 +271,11 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
 
 
 export async function storeCover(itemId: number, coverUrl: string, type: 'book' | 'magazine' | 'bundle' = 'book'): Promise<void> {
-  const { data: userRes } = await supabase.auth.getUser();
-  const user = userRes?.user;
-  if (!user) throw new Error('Not authenticated');
-  const userId = user.id;
-
-  const res = await fetch(coverUrl, { mode: 'cors' }).catch(() => fetch(coverUrl));
-  if (!res.ok) throw new Error('Failed to fetch cover');
-  const blob = await res.blob();
-
-  const thumbBlob = await createThumbnail(blob, 320);
-
-  const ext = blob.type.includes('png') ? 'png' : blob.type.includes('webp') ? 'webp' : 'jpg';
-  const basePath = `${userId}/${type}/${itemId}`;
-  const fileName = `cover-${Date.now()}.${ext}`;
-  const thumbName = `cover-${Date.now()}-thumb.webp`;
-
-  const { error: upErr } = await supabase.storage.from('photos').upload(`${basePath}/${fileName}`, blob, {
-    cacheControl: '3600', upsert: true, contentType: blob.type || `image/${ext}`
+  const { error, data } = await supabase.functions.invoke('mirror-cover', {
+    body: { itemId, type, sourceUrl: coverUrl }
   });
-  if (upErr) throw upErr;
-
-  const { error: upThumbErr } = await supabase.storage.from('photos').upload(`${basePath}/${thumbName}`, thumbBlob, {
-    cacheControl: '3600', upsert: true, contentType: 'image/webp'
-  });
-  if (upThumbErr) throw upThumbErr;
-
-  const { data: pub1 } = supabase.storage.from('photos').getPublicUrl(`${basePath}/${fileName}`);
-  const { data: pub2 } = supabase.storage.from('photos').getPublicUrl(`${basePath}/${thumbName}`);
-
-  await supabase.from('photos').insert({
-    item_id: Number(itemId),
-    file_name: fileName,
-    storage_path: `${basePath}/${fileName}`,
-    public_url: pub1.publicUrl,
-    url_public: pub1.publicUrl,
-    thumb_url: pub2.publicUrl,
-    user_id: user.id,
-  });
+  if (error) throw error;
+  // optional: could return data for UI
 }
 
 async function createThumbnail(file: Blob, maxSize: number): Promise<Blob> {
