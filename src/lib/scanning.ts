@@ -19,7 +19,7 @@ export type LookupMeta = {
   inferred_year?: string | null;
   inferred_issue?: string | null;
   // explicit magazine fields provided by UI
-  series_title?: string | null;
+  issue_title?: string | null;
   issue_number?: string | null;
   issue_date?: string | null;
 } | null;
@@ -136,10 +136,21 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
     if (updErr) throw updErr;
     return existing.id as unknown as number;
   } else {
+    // Build a composed title for magazines: Publication - Issue Title - Issue X - Month Year
+    let composedTitle: string | null = null;
+    if (finalType === 'magazine') {
+      const publicationName = meta.title || '';
+      const issueTitle = meta.issue_title || '';
+      const issueNum = meta.issue_number || meta.inferred_issue || '';
+      const monthYear = meta.issue_date || (meta.inferred_month && meta.inferred_year ? `${meta.inferred_month} ${meta.inferred_year}` : (meta.inferred_year || '')) || '';
+      const parts = [publicationName, issueTitle, issueNum ? `Issue ${issueNum}` : '', monthYear].filter(Boolean);
+      composedTitle = parts.join(' - ') || null;
+    }
+
     const insertData: any = {
       user_id: user.id,
       type: finalType,
-      title: meta.title ?? null,
+      title: finalType === 'magazine' ? (composedTitle ?? (meta.title ?? null)) : (meta.title ?? null),
       publisher: meta.publisher ?? null,
       authors: meta.authors ?? null,
       year: meta.year ?? null,
@@ -177,14 +188,16 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
         .from('inventory_items')
         .insert({
           user_id: user.id,
+          // Publication name in title, issue title in subtitle
           title: meta.title ?? null,
-          series_title: meta.series_title ?? null,
+          subtitle: meta.issue_title ?? null,
           issue_number: meta.issue_number ?? meta.inferred_issue ?? null,
           issue_date: issueDate,
           publication_year: meta.year ? parseInt(meta.year, 10) || null : (meta.inferred_year ? parseInt(meta.inferred_year, 10) || null : null),
           isbn: meta.barcode ?? null,
           suggested_category: 'magazine',
           suggested_price: meta.suggested_price ?? null,
+          suggested_title: composedTitle ?? null,
           status: 'processed',
         })
         .select()

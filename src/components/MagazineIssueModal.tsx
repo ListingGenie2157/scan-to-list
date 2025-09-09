@@ -15,7 +15,8 @@ interface MagazineIssueModalProps {
 }
 
 export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: MagazineIssueModalProps) {
-  const [seriesTitle, setSeriesTitle] = useState(meta.title || '');
+  const [publicationName, setPublicationName] = useState(meta.title || '');
+  const [issueTitle, setIssueTitle] = useState('');
   const [issueNumber, setIssueNumber] = useState(meta.inferred_issue || '');
   const [coverMonth, setCoverMonth] = useState(meta.inferred_month || '');
   const [coverYear, setCoverYear] = useState(meta.inferred_year || new Date().getFullYear().toString());
@@ -29,8 +30,8 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
   ];
 
   const handleConfirm = async () => {
-    if (!seriesTitle.trim()) {
-      toast({ title: 'Missing Information', description: 'Series title is required', variant: 'destructive' });
+    if (!publicationName.trim()) {
+      toast({ title: 'Missing Information', description: 'Publication name is required', variant: 'destructive' });
       return;
     }
 
@@ -42,17 +43,17 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
         specialIssue ? specialIssue : null,
       ].filter(Boolean).join(' • ');
       const dateBit = coverMonth && coverYear ? `${coverMonth} ${coverYear}` : (coverYear ? coverYear : '');
-      const enhancedTitle = [seriesTitle, dateBit, issueBits].filter(Boolean).join(' - ');
+      const enhancedTitle = [publicationName, issueTitle, issueNumber ? `Issue ${issueNumber}` : null, dateBit].filter(Boolean).join(' - ');
 
       const enhancedMeta: NonNullable<LookupMeta> = {
         ...meta,
-        title: enhancedTitle,
+        title: publicationName,
+        issue_title: issueTitle || null,
         year: coverYear,
         type: 'magazine',
         // Keep the addon and barcode; preserve suggested price if provided from backend
         suggested_price: meta.suggested_price ?? null,
         // Explicit magazine fields for persistence
-        series_title: seriesTitle,
         issue_number: issueNumber || meta.inferred_issue || null,
         issue_date: dateBit || null,
       };
@@ -81,12 +82,22 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="series-title">Series Title *</Label>
+            <Label htmlFor="publication-name">Publication Name *</Label>
             <Input
-              id="series-title"
-              value={seriesTitle}
-              onChange={(e) => setSeriesTitle(e.target.value)}
-              placeholder="e.g., National Geographic"
+              id="publication-name"
+              value={publicationName}
+              onChange={(e) => setPublicationName(e.target.value)}
+              placeholder="e.g., Time Magazine, National Geographic"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="issue-title">Issue Title (optional)</Label>
+            <Input
+              id="issue-title"
+              value={issueTitle}
+              onChange={(e) => setIssueTitle(e.target.value)}
+              placeholder="e.g., The World of AI"
             />
           </div>
 
