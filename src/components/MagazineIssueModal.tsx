@@ -50,7 +50,11 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
         year: coverYear,
         type: 'magazine',
         // Keep the addon and barcode; preserve suggested price if provided from backend
-        suggested_price: meta.suggested_price ?? meta.suggested_price ?? null,
+        suggested_price: meta.suggested_price ?? null,
+        // Explicit magazine fields for persistence
+        series_title: seriesTitle,
+        issue_number: issueNumber || meta.inferred_issue || null,
+        issue_date: dateBit || null,
       };
 
       onConfirm(enhancedMeta);

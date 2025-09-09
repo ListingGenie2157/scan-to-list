@@ -18,6 +18,10 @@ export type LookupMeta = {
   inferred_month?: string | null;
   inferred_year?: string | null;
   inferred_issue?: string | null;
+  // explicit magazine fields provided by UI
+  series_title?: string | null;
+  issue_number?: string | null;
+  issue_date?: string | null;
 } | null;
 
 export function normalizeScan(raw: string): string | null {
@@ -163,12 +167,37 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
       .single();
     if (insErr) throw insErr;
     const newId = inserted!.id as number;
-    await maybeGenerateAndSavePrice(newId, meta);
+    let newInventoryId: string | undefined = undefined;
+    // Also create an inventory_items entry for magazines with disambiguation details
+    if (finalType === 'magazine') {
+      const issueDate = meta.issue_date || (
+        meta.inferred_month && meta.inferred_year ? `${meta.inferred_month} ${meta.inferred_year}` : (meta.inferred_year || null)
+      );
+      const { data: inv, error: invErr } = await supabase
+        .from('inventory_items')
+        .insert({
+          user_id: user.id,
+          title: meta.title ?? null,
+          series_title: meta.series_title ?? null,
+          issue_number: meta.issue_number ?? meta.inferred_issue ?? null,
+          issue_date: issueDate,
+          publication_year: meta.year ? parseInt(meta.year, 10) || null : (meta.inferred_year ? parseInt(meta.inferred_year, 10) || null : null),
+          isbn: meta.barcode ?? null,
+          suggested_category: 'magazine',
+          suggested_price: meta.suggested_price ?? null,
+          status: 'processed',
+        })
+        .select()
+        .single();
+      if (!invErr) newInventoryId = inv?.id as string | undefined;
+    }
+
+    await maybeGenerateAndSavePrice(newId, meta, newInventoryId);
     return newId;
   }
 }
 
-async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<LookupMeta>) {
+async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<LookupMeta>, inventoryItemId?: string) {
   // Attempt to generate a price using multiple strategies. We prefer pulling
   // real-world pricing data via our eBay proxy function if an ISBN or
   // reasonable query is available. If that fails, fall back to the
@@ -218,6 +247,9 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
     }
     if (typeof suggestedPrice === 'number' && isFinite(suggestedPrice)) {
       await supabase.from('items').update({ suggested_price: suggestedPrice }).eq('id', itemId);
+      if (inventoryItemId) {
+        await supabase.from('inventory_items').update({ suggested_price: suggestedPrice }).eq('id', inventoryItemId);
+      }
     }
   } catch (e) {
     console.warn('Price generation failed:', e);
