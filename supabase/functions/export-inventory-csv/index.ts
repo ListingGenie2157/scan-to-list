@@ -13,18 +13,29 @@ serve(async (req) => {
   }
 
   try {
-    const { selectedItemIds, userId } = await req.json();
-    
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
+    const { selectedItemIds } = await req.json().catch(() => ({}));
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    // Derive the authenticated user from the Authorization header (JWT)
+    const authHeader = req.headers.get('Authorization') || '';
+    const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+    const { data: { user }, error: userErr } = await supabaseUser.auth.getUser();
+    if (userErr || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
 
     // Build query for inventory items with photo URLs
-    let query = supabase
+    let query = supabaseUser
       .from('inventory_items')
       .select(`
         id,
@@ -36,7 +47,7 @@ serve(async (req) => {
         suggested_price,
         photos!inventory_items_photo_id_fkey(public_url)
       `)
-      .eq('user_id', userId);
+      .eq('user_id', user.id);
 
     // Filter by selected items if provided
     if (selectedItemIds && selectedItemIds.length > 0) {
@@ -102,9 +113,9 @@ serve(async (req) => {
 
     // Store CSV in storage
     const fileName = `inventory_export_${new Date().toISOString().split('T')[0]}_${Date.now()}.csv`;
-    const storagePath = `exports/${userId}/${fileName}`;
+    const storagePath = `exports/${user.id}/${fileName}`;
 
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await supabaseAdmin.storage
       .from('exports')
       .upload(storagePath, new Blob([csvContent], { type: 'text/csv' }));
 
@@ -112,19 +123,22 @@ serve(async (req) => {
       throw uploadError;
     }
 
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
+    // Create a short-lived signed URL for download (private bucket recommended)
+    const { data: signed, error: signErr } = await supabaseAdmin.storage
       .from('exports')
-      .getPublicUrl(storagePath);
+      .createSignedUrl(storagePath, 60 * 15); // 15 minutes
+    if (signErr) {
+      throw signErr;
+    }
 
     // Record export in database
-    const { error: recordError } = await supabase
+    const { error: recordError } = await supabaseAdmin
       .from('csv_exports')
       .insert({
-        user_id: userId,
+        user_id: user.id,
         file_name: fileName,
         storage_path: storagePath,
-        download_url: publicUrl,
+        download_url: signed?.signedUrl || null,
         item_count: items.length
       });
 
@@ -134,7 +148,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       success: true,
-      download_url: publicUrl,
+      download_url: signed?.signedUrl,
       file_name: fileName,
       item_count: items.length
     }), {

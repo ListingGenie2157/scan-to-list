@@ -62,3 +62,11 @@ verify_jwt = true
 [functions.ebay-oauth-callback]
 verify_jwt = false
 
+[functions.export-inventory-csv]
+enabled = true
+verify_jwt = true
+
+[functions.delete-items]
+enabled = true
+verify_jwt = true
+

@@ -1,5 +1,3 @@
-import { ConnectEbayButton } from "@/components/ConnectEbayButton";
-
 import { Dashboard } from "@/components/Dashboard";
 
 const Index = () => {
