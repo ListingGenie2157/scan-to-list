@@ -4,6 +4,8 @@ import { getActivePricing } from "@/lib/ebayCompat";
 export type LookupMeta = {
   type: string | null;
   isbn13: string | null;
+  barcode?: string | null;
+  barcode_addon?: string | null;
   title: string | null;
   authors: string[] | null;
   publisher: string | null;
@@ -67,60 +69,97 @@ export async function lookupIsbn(isbn13: string): Promise<LookupMeta> {
   return (data as any) ?? null;
 }
 
-export async function upsertItem(meta: NonNullable<LookupMeta>): Promise<number> {
+export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: 'book' | 'magazine'): Promise<number> {
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes?.user;
   if (!user) throw new Error('Not authenticated');
-  const isbn = meta.isbn13!;
 
-  // Try find existing
-  const { data: existing, error: exErr } = await supabase
-    .from('items')
-    .select('id, quantity')
-    .eq('user_id', user.id)
-    .eq('isbn13', isbn)
-    .maybeSingle();
-  if (exErr && (exErr as any).code !== 'PGRST116') throw exErr;
+  // Determine final type: user preference > detected type > default book
+  const finalType = userItemType || meta.type || 'book';
+
+  // For magazines, use barcode for lookups instead of isbn13
+  const isBookWithIsbn = finalType === 'book' && meta.isbn13;
+  const isMagazineWithBarcode = finalType === 'magazine' && meta.barcode;
+
+  let existing = null;
+  if (isBookWithIsbn) {
+    const { data: existingData, error: exErr } = await supabase
+      .from('items')
+      .select('id, quantity')
+      .eq('user_id', user.id)
+      .eq('isbn13', meta.isbn13!)
+      .maybeSingle();
+    if (exErr && (exErr as any).code !== 'PGRST116') throw exErr;
+    existing = existingData;
+  } else if (isMagazineWithBarcode) {
+    // For magazines, we'll use isbn13 field temporarily to store barcode
+    // until barcode columns are properly migrated
+    const { data: existingData, error: exErr } = await supabase
+      .from('items')
+      .select('id, quantity')
+      .eq('user_id', user.id)
+      .eq('isbn13', meta.barcode!)
+      .maybeSingle();
+    if (exErr && (exErr as any).code !== 'PGRST116') throw exErr;
+    existing = existingData;
+  }
 
   if (existing) {
+    const updateData: any = {
+      quantity: (existing.quantity ?? 1) + 1,
+      title: meta.title ?? null,
+      publisher: meta.publisher ?? null,
+      authors: meta.authors ?? null,
+      year: meta.year ?? null,
+      description: meta.description ?? null,
+      categories: meta.categories ?? null,
+      cover_url_ext: meta.coverUrl ?? null,
+      last_scanned_at: new Date().toISOString(),
+      type: finalType,
+    };
+    
+    // Temporarily store barcode in isbn13 field for magazines
+    if (meta.barcode && finalType === 'magazine') {
+      updateData.isbn13 = meta.barcode;
+    }
+
     const { error: updErr } = await supabase
       .from('items')
-      .update({
-        quantity: (existing.quantity ?? 1) + 1,
-        title: meta.title ?? null,
-        publisher: meta.publisher ?? null,
-        authors: meta.authors ?? null,
-        year: meta.year ?? null,
-        description: meta.description ?? null,
-        categories: meta.categories ?? null,
-        cover_url_ext: meta.coverUrl ?? null,
-        last_scanned_at: new Date().toISOString(),
-        type: meta.type ?? 'book',
-      })
+      .update(updateData)
       .eq('id', existing.id);
     if (updErr) throw updErr;
     return existing.id as unknown as number;
   } else {
+    const insertData: any = {
+      user_id: user.id,
+      type: finalType,
+      title: meta.title ?? null,
+      publisher: meta.publisher ?? null,
+      authors: meta.authors ?? null,
+      year: meta.year ?? null,
+      description: meta.description ?? null,
+      categories: meta.categories ?? null,
+      cover_url_ext: meta.coverUrl ?? null,
+      quantity: 1,
+      status: 'draft',
+      source: 'scan',
+      last_scanned_at: new Date().toISOString(),
+    };
+
+    // Add appropriate identifier fields
+    if (meta.isbn13 && finalType === 'book') {
+      insertData.isbn13 = meta.isbn13;
+    } else if (meta.barcode && finalType === 'magazine') {
+      // Temporarily store barcode in isbn13 field for magazines
+      insertData.isbn13 = meta.barcode;
+    }
+
     const { data: inserted, error: insErr } = await supabase
       .from('items')
-      .insert({
-        user_id: user.id,
-        type: meta.type ?? 'book',
-        isbn13: isbn,
-        title: meta.title ?? null,
-        publisher: meta.publisher ?? null,
-        authors: meta.authors ?? null,
-        year: meta.year ?? null,
-        description: meta.description ?? null,
-        categories: meta.categories ?? null,
-        cover_url_ext: meta.coverUrl ?? null,
-        quantity: 1,
-        status: 'draft',
-        source: 'scan',
-        last_scanned_at: new Date().toISOString(),
-      })
+      .insert(insertData)
       .select()
       .single();
+    if (insErr) throw insErr;
     const newId = inserted!.id as number;
     await maybeGenerateAndSavePrice(newId, meta);
     return newId;
@@ -136,11 +175,10 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
   try {
     let suggestedPrice: number | undefined;
     // First try eBay pricing if we have an ISBN or at least a title for the query.
-    // First try eBay pricing if we have an ISBN or at least a title for the query.
     try {
       const body: any = {};
-      if (meta.isbn13) body.isbn = meta.isbn13;
-      // If no ISBN but we have a title, fallback to query based search.
+      if (meta.isbn13 && meta.type !== 'magazine') body.isbn = meta.isbn13;
+      // For magazines or items without ISBN, use title-based search
       if (!body.isbn && meta.title) body.query = meta.title;
       if (Object.keys(body).length > 0) {
         try {
@@ -185,7 +223,7 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
 }
 
 
-export async function storeCover(itemId: number, coverUrl: string, type: 'book' | 'magazine' = 'book'): Promise<void> {
+export async function storeCover(itemId: number, coverUrl: string, type: 'book' | 'magazine' | 'bundle' = 'book'): Promise<void> {
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes?.user;
   if (!user) throw new Error('Not authenticated');
@@ -222,6 +260,7 @@ export async function storeCover(itemId: number, coverUrl: string, type: 'book' 
     public_url: pub1.publicUrl,
     url_public: pub1.publicUrl,
     thumb_url: pub2.publicUrl,
+    user_id: user.id,
   });
 }
 

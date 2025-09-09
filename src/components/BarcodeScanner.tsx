@@ -8,6 +8,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { normalizeScan, lookupIsbn, upsertItem, storeCover } from '@/lib/scanning';
 import { useScannerSettings } from '@/hooks/useScannerSettings';
+import { useItemTypeSetting } from '@/hooks/useItemTypeSetting';
+import { MagazineIssueModal } from '@/components/MagazineIssueModal';
 
 interface BarcodeScannerProps {
   onScanSuccess?: (data: any) => void;
@@ -18,9 +20,12 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   const [showWebScanner, setShowWebScanner] = useState(false);
   const [batchMode, setBatchMode] = useState(false);
   const [lastScans, setLastScans] = useState<string[]>([]);
+  const [showMagazineModal, setShowMagazineModal] = useState(false);
+  const [pendingMagazineMeta, setPendingMagazineMeta] = useState<any>(null);
   const recentSet = useRef<Map<string, number>>(new Map());
   const { toast } = useToast();
   const { mirrorCovers, setMirrorCovers } = useScannerSettings();
+  const { itemType } = useItemTypeSetting();
 
   const addLastScan = (line: string) => {
     setLastScans((prev) => [...prev.slice(-2), line]);
@@ -91,19 +96,38 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
         return;
       }
 
-      // Determine item type for cover storage (book or magazine) based on meta.type if available
-      const itemType: 'book' | 'magazine' = (meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book';
+      // Check if this is a magazine that needs disambiguation
+      if (meta.type === 'magazine' && meta.barcode && (!meta.title || meta.title.toLowerCase().includes('magazine'))) {
+        // Show magazine issue modal for generic magazine results
+        setPendingMagazineMeta(meta);
+        setShowMagazineModal(true);
+        return;
+      }
 
-      const itemId = await upsertItem(meta);
+      await completeSave(meta);
+    } catch (error) {
+      console.error('Barcode processing error:', error);
+      toast({ title: 'Error', description: 'Failed to process barcode', variant: 'destructive' });
+    }
+  };
+
+  const completeSave = async (meta: any) => {
+    try {
+      // Determine item type for cover storage based on meta.type or user setting
+      const finalItemType: 'book' | 'magazine' | 'bundle' = itemType === 'bundle' ? 'bundle' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
+      const upsertItemType: 'book' | 'magazine' = itemType === 'bundle' ? 'book' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
+
+      const itemId = await upsertItem(meta, upsertItemType);
       if (mirrorCovers && meta.coverUrl) {
         try {
-          await storeCover(itemId, meta.coverUrl, itemType);
+          await storeCover(itemId, meta.coverUrl, finalItemType);
         } catch (e) {
           console.warn('Cover mirror failed:', e);
         }
       }
 
-      toast({ title: 'Saved', description: `Saved ${codeToUse} – ${meta.title || 'Untitled'}` });
+      const displayCode = meta.barcode || meta.isbn13 || 'Unknown';
+      toast({ title: 'Saved', description: `Saved ${displayCode} – ${meta.title || 'Untitled'}` });
       onScanSuccess?.(meta);
     } catch (error) {
       console.error('Barcode processing error:', error);
@@ -118,13 +142,15 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
           <Camera className="w-4 h-4 mr-2" />
           {batchMode ? 'Start Batch Scan' : 'Scan Barcode'}
         </Button>
-        <div className="flex items-center gap-2">
-          <Switch id="batch-scan" checked={batchMode} onCheckedChange={setBatchMode} />
-          <Label htmlFor="batch-scan">Batch Scan</Label>
-        </div>
-        <div className="flex items-center gap-2">
-          <Switch id="mirror-covers" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
-          <Label htmlFor="mirror-covers">Mirror external covers to storage</Label>
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+          <div className="flex items-center space-x-2">
+            <Switch id="batch-scan" checked={batchMode} onCheckedChange={setBatchMode} />
+            <Label htmlFor="batch-scan">Batch Scan (keep scanner open)</Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Switch id="mirror-covers" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
+            <Label htmlFor="mirror-covers">Auto-populate book covers</Label>
+          </div>
         </div>
       </div>
 
@@ -134,6 +160,15 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
           onClose={() => setShowWebScanner(false)}
           continuous={batchMode}
           overlayLines={lastScans}
+        />
+      )}
+
+      {showMagazineModal && pendingMagazineMeta && (
+        <MagazineIssueModal
+          open={showMagazineModal}
+          onOpenChange={setShowMagazineModal}
+          meta={pendingMagazineMeta}
+          onConfirm={completeSave}
         />
       )}
     </>

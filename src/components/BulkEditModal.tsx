@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Edit3, Save, X } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Edit3, Save, X, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -19,6 +20,7 @@ interface BulkEditModalProps {
 interface BulkUpdateData {
   category?: string;
   status?: string;
+  aiOptimize?: boolean;
 }
 
 export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComplete }: BulkEditModalProps) {
@@ -26,10 +28,102 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
   const [isUpdating, setIsUpdating] = useState(false);
   const [updateData, setUpdateData] = useState<BulkUpdateData>({});
 
-  const handleUpdate = async () => {
-    if (Object.keys(updateData).length === 0) {
+  const performBulkAIOptimize = async () => {
+    setIsUpdating(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const itemId of selectedItems) {
+        try {
+          // Get item details from inventory_items table
+          const { data: item } = await supabase
+            .from('inventory_items')
+            .select('*')
+            .eq('id', itemId)
+            .single();
+
+          if (!item) continue;
+
+          // Call generate-ebay-listing function
+          const { data: result, error } = await supabase.functions.invoke('generate-ebay-listing', {
+            body: {
+              itemData: {
+                title: item.title,
+                author: item.author,
+                publisher: item.publisher,
+                publication_year: item.publication_year,
+                condition: item.condition_assessment,
+                category: item.suggested_category,
+                isbn: item.isbn,
+                genre: item.genre,
+                issue_number: item.issue_number,
+                issue_date: item.issue_date
+              },
+              userId: item.user_id
+            }
+          });
+
+          if (error) {
+            console.error(`AI optimize error for item ${itemId}:`, error);
+            errorCount++;
+            continue;
+          }
+
+          if (result?.success && result?.optimizedListing) {
+            // Update inventory item with optimized data
+            const updatePayload: any = {
+              suggested_title: result.optimizedListing.title,
+              description: result.optimizedListing.description,
+            };
+
+            if (result.optimizedListing.price) {
+              updatePayload.suggested_price = result.optimizedListing.price;
+            }
+
+            await supabase
+              .from('inventory_items')
+              .update(updatePayload)
+              .eq('id', itemId);
+
+            successCount++;
+          } else {
+            errorCount++;
+          }
+        } catch (itemError) {
+          console.error(`Error processing item ${itemId}:`, itemError);
+          errorCount++;
+        }
+      }
+
       toast({
-        title: "No changes selected",
+        title: "Bulk AI Optimize Complete",
+        description: `Optimized ${successCount} items${errorCount > 0 ? `, ${errorCount} failed` : ''}`
+      });
+
+      onBulkUpdateComplete();
+      onClose();
+    } catch (error) {
+      console.error('Bulk AI optimize error:', error);
+      toast({
+        title: "Bulk AI Optimize Failed",
+        description: error.message || "Failed to optimize items",
+        variant: "destructive"
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    if (updateData.aiOptimize) {
+      await performBulkAIOptimize();
+      return;
+    }
+
+    if (Object.keys(updateData).filter(key => key !== 'aiOptimize').length === 0) {
+      toast({
+        title: "No changes selected",  
         description: "Please select at least one field to update.",
         variant: "destructive"
       });
@@ -159,6 +253,23 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
                   </SelectContent>
                 </Select>
               </div>
+
+              <div className="space-y-2 pt-4 border-t">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 text-primary" />
+                    <Label htmlFor="ai-optimize">AI Optimize Listings</Label>
+                  </div>
+                  <Switch 
+                    id="ai-optimize"
+                    checked={updateData.aiOptimize || false}
+                    onCheckedChange={(checked) => setUpdateData(prev => ({ ...prev, aiOptimize: checked }))}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Generate SEO-optimized titles and descriptions for all selected items
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -171,6 +282,9 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
                 )}
                 {updateData.status && (
                   <p className="text-xs">• Status → {updateData.status}</p>
+                )}
+                {updateData.aiOptimize && (
+                  <p className="text-xs">• Generate optimized titles & descriptions</p>
                 )}
               </div>
             </div>
@@ -189,12 +303,12 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
             {isUpdating ? (
               <>
                 <div className="animate-spin w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full mr-2" />
-                Updating...
+                {updateData.aiOptimize ? 'AI Optimizing...' : 'Updating...'}
               </>
             ) : (
               <>
-                <Save className="w-4 h-4 mr-2" />
-                Update {selectedItems.length} Items
+                {updateData.aiOptimize ? <Sparkles className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
+                {updateData.aiOptimize ? 'AI Optimize' : 'Update'} {selectedItems.length} Items
               </>
             )}
           </Button>

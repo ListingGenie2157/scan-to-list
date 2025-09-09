@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Filter, Package, Clock, CheckCircle, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2, Plus, DollarSign } from "lucide-react";
+import { Search, Filter, Package, Clock, CheckCircle, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2, Plus, DollarSign, Edit, ExternalLink, Settings } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
@@ -13,6 +13,8 @@ import { CreateListingModal } from "@/components/CreateListingModal";
 import { BulkListingModal } from "@/components/BulkListingModal";
 import { BulkEditModal } from "@/components/BulkEditModal";
 import EbayPricingModal from "@/components/EbayPricingModal";
+import { AsinMatchModal } from "@/components/AsinMatchModal";
+import { ItemEditModal } from "@/components/ItemEditModal";
 
 interface InventoryItem {
   id: string;
@@ -29,6 +31,7 @@ interface InventoryItem {
   isbn: string | null;
   issue_number: string | null;
   issue_date: string | null;
+  series_title: string | null;
   created_at: string;
   photos: {
     public_url: string | null;
@@ -39,6 +42,10 @@ interface InventoryItem {
   type?: string | null;
   quantity?: number | null;
   last_scanned_at?: string | null;
+  // Amazon fields
+  amazon_asin?: string | null;
+  amazon_title?: string | null;
+  amazon_match_confidence?: number | null;
 }
 
 export interface InventoryGridRef {
@@ -50,6 +57,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "compact" | "list">("grid");
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,6 +69,9 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [isExporting, setIsExporting] = useState(false);
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false);
   const [pricingItem, setPricingItem] = useState<InventoryItem | null>(null);
+  const [isAsinMatchModalOpen, setIsAsinMatchModalOpen] = useState(false);
+  const [asinMatchItem, setAsinMatchItem] = useState<InventoryItem | null>(null);
+  const [editModalItem, setEditModalItem] = useState<InventoryItem | null>(null);
   const { toast } = useToast();
 
   useImperativeHandle(ref, () => ({
@@ -75,6 +86,102 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
   const fetchInventory = async () => {
     try {
+      // Try to fetch from inventory_items first (new table structure)
+      const { data: inventoryData, error: inventoryError } = await supabase
+        .from('inventory_items')
+        .select(`
+          id,
+          title,
+          author,
+          status,
+          suggested_category,
+          suggested_price,
+          publisher,
+          publication_year,
+          isbn,
+          created_at,
+          amazon_asin,
+          amazon_title,
+          amazon_match_confidence,
+          photo_id,
+          genre,
+          series_title,
+          issue_number,
+          suggested_title
+        `)
+        .eq('user_id', user?.id)
+        .in('status', ['photographed', 'processed'])
+        .order('created_at', { ascending: false });
+
+      if (!inventoryError && inventoryData && inventoryData.length > 0) {
+        // New inventory_items structure
+        const photoIds = inventoryData.map(item => item.photo_id).filter(Boolean);
+        
+        // Fetch photos for all items at once
+        let photosMap: Record<string, any> = {};
+        if (photoIds.length > 0) {
+          const { data: photosData } = await supabase
+            .from('photos')
+            .select('id, public_url, thumb_url, url_public')
+            .in('id', photoIds);
+          
+          photosMap = photosData?.reduce((acc, photo) => {
+            acc[photo.id] = {
+              public_url: photo.public_url || photo.url_public,
+              thumb_url: photo.thumb_url
+            };
+            return acc;
+          }, {}) || {};
+        }
+
+        const mapped = inventoryData.map((item: any) => {
+          // Determine category/type
+          let category = item.suggested_category;
+          let type = item.suggested_category;
+          
+          // Auto-classify if not set
+          if (!category) {
+            if (item.genre?.toLowerCase().includes('magazine') || item.issue_number) {
+              category = 'magazine';
+              type = 'magazine';
+            } else {
+              category = 'book';
+              type = 'book';
+            }
+          }
+
+          return {
+            id: String(item.id),
+            title: item.title ?? null,
+            author: item.author ?? null,
+            status: item.status ?? 'photographed',
+            suggested_category: category,
+            suggested_price: item.suggested_price ?? null,
+            suggested_title: item.suggested_title ?? null,
+            publisher: item.publisher ?? null,
+            publication_year: item.publication_year ?? null,
+            condition_assessment: item.condition_assessment ?? null,
+            genre: item.genre ?? null,
+            isbn: item.isbn ?? null,
+            issue_number: item.issue_number ?? null,
+            issue_date: item.issue_date ?? null,
+            series_title: item.series_title ?? null,
+            created_at: item.created_at,
+            confidence_score: item.confidence_score ?? null,
+            photos: item.photo_id ? photosMap[item.photo_id] : null,
+            type: type,
+            quantity: 1,
+            last_scanned_at: item.created_at,
+            amazon_asin: item.amazon_asin,
+            amazon_title: item.amazon_title,
+            amazon_match_confidence: item.amazon_match_confidence,
+          };
+        });
+        setInventory(mapped);
+        return;
+      }
+
+      // Fallback to items table (old structure)
       const { data, error } = await supabase
         .from('items')
         .select(`
@@ -119,6 +226,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             isbn: it.isbn13 ?? null,
             issue_number: null,
             issue_date: null,
+            series_title: null,
             created_at: it.created_at,
             confidence_score: null,
             photos: firstPhoto,
@@ -126,6 +234,10 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             type: it.type ?? 'book',
             quantity: it.quantity ?? 1,
             last_scanned_at: it.last_scanned_at ?? null,
+            // Amazon fields (default to null for old items structure)
+            amazon_asin: null,
+            amazon_title: null,
+            amazon_match_confidence: null,
           } as any;
         });
         setInventory(mapped);
@@ -144,8 +256,9 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                          author.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === "all" || item.status === statusFilter;
     const matchesCategory = categoryFilter === "all" || item.suggested_category === categoryFilter;
+    const matchesType = typeFilter === "all" || item.type === typeFilter;
     
-    return matchesSearch && matchesStatus && matchesCategory;
+    return matchesSearch && matchesStatus && matchesCategory && matchesType;
   });
 
   const getStatusIcon = (status: string) => {
@@ -173,9 +286,15 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   };
 
   const getCategoryIcon = (category: string) => {
-    return category === "book" ? 
-      <BookOpen className="w-4 h-4 text-muted-foreground" /> : 
-      <Calendar className="w-4 h-4 text-muted-foreground" />;
+    if (category === "book") return <BookOpen className="w-4 h-4 text-muted-foreground" />;
+    if (category === "magazine") return <Calendar className="w-4 h-4 text-muted-foreground" />;
+    return <Package className="w-4 h-4 text-muted-foreground" />;
+  };
+
+  const getTypeBadge = (type: string | null | undefined) => {
+    if (type === 'magazine') return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">Magazine</Badge>;
+    if (type === 'bundle') return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Bundle</Badge>;
+    return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Book</Badge>;
   };
 
   const getGridColumns = () => {
@@ -255,6 +374,11 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
     setIsPricingModalOpen(true);
   };
 
+  const handleAsinMatch = (item: InventoryItem) => {
+    setAsinMatchItem(item);
+    setIsAsinMatchModalOpen(true);
+  };
+
   const handleAddPhoto = async (itemId: string) => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -288,6 +412,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           public_url: pub1.publicUrl,
           url_public: pub1.publicUrl,
           thumb_url: pub2.publicUrl,
+          user_id: user.id,
         });
 
         toast({ title: 'Photo added', description: 'Your photo was uploaded.' });
@@ -363,14 +488,17 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   {item.title || item.suggested_category || 'Untitled'}
                 </h3>
                 <div className="flex items-center justify-between">
-                  <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
+                  <div className="flex gap-1">
+                    <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
+                    {getTypeBadge(item.type)}
+                  </div>
                   {getStatusIcon(item.status)}
                 </div>
               </div>
               
               {/* Compact Actions */}
               <Button 
-                variant="default" 
+                variant="outline" 
                 size="sm" 
                 className="w-full text-xs"
                 onClick={() => {
@@ -378,7 +506,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   setIsCreateListingModalOpen(true);
                 }}
               >
-                List
+                List on eBay
               </Button>
             </div>
           </CardContent>
@@ -428,7 +556,10 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 </p>
                 
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-sm">Qty: {item.quantity ?? 1}</span>
+                  <div className="flex gap-2 items-center">
+                    <span className="font-semibold text-sm">Qty: {item.quantity ?? 1}</span>
+                    {getTypeBadge(item.type)}
+                  </div>
                   <span className="text-xs text-muted-foreground">
                     {item.last_scanned_at ? `Scanned ${new Date(item.last_scanned_at).toLocaleDateString()}` : ''}
                   </span>
@@ -448,7 +579,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   Edit
                 </Button>
                 <Button 
-                  variant="default" 
+                  variant="outline" 
                   size="sm" 
                   className="text-xs"
                   onClick={() => {
@@ -456,7 +587,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                     setIsCreateListingModalOpen(true);
                   }}
                 >
-                  List
+                  List on eBay
                 </Button>
               </div>
             </div>
@@ -509,11 +640,27 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
               </div>
               
               <p className="text-sm text-muted-foreground line-clamp-1">
-                {item.author || 'Unknown Author'}
+                {item.suggested_category === 'magazine' ? (
+                  <>
+                    {item.series_title && `${item.series_title} `}
+                    {item.issue_number && `Issue #${item.issue_number}`}
+                    {item.issue_date && ` (${item.issue_date})`}
+                  </>
+                ) : (
+                  item.author || 'Unknown Author'
+                )}
               </p>
               
               <div className="flex items-center justify-between">
-                <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
+                 <div className="flex items-center gap-1">
+                   <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
+                   {getTypeBadge(item.type)}
+                   {(item as any).amazon_asin && (
+                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs">
+                      ASIN
+                    </Badge>
+                   )}
+                 </div>
                 <div className="flex items-center gap-1">
                   {getStatusIcon(item.status)}
                   {getStatusBadge(item.status)}
@@ -533,47 +680,38 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   variant="outline" 
                   size="sm" 
                   className="flex-1 min-w-0"
-                  onClick={(e) => { e.stopPropagation(); /* TODO: Implement edit */ }}
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setEditModalItem(item);
+                  }}
                 >
-                  Edit
+                  <Settings className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Edit
                 </Button>
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="flex-1 min-w-0 text-xs sm:text-sm"
+                  className="flex-1 min-w-0"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleAddPhoto(item.id);
+                    handleAsinMatch(item);
                   }}
+                  title="Link this item to its Amazon product page (optional)"
                 >
-                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Add Photo
+                  <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Amazon
                 </Button>
               </div>
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleGetPricing(item);
-                  }}
-                >
-                  <DollarSign className="w-4 h-4 mr-1" /> eBay Pricing
-                </Button>
-                <Button 
-                  variant="default" 
-                  size="sm" 
-                  className="flex-1"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedItem(item);
-                    setIsCreateListingModalOpen(true);
-                  }}
-                >
-                  Create Listing
-                </Button>
-              </div>
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+                 className="w-full"
+                 onClick={(e) => {
+                   e.stopPropagation();
+                   setSelectedItem(item);
+                   setIsCreateListingModalOpen(true);
+                 }}
+               >
+                <Package className="w-4 h-4 mr-1" /> List on eBay
+               </Button>
             </div>
           </div>
         </CardContent>
@@ -606,6 +744,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="photographed">Photographed</SelectItem>
                   <SelectItem value="draft">Draft</SelectItem>
                   <SelectItem value="processed">Processed</SelectItem>
                   <SelectItem value="listed">Listed</SelectItem>
@@ -621,6 +760,18 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="book">Books</SelectItem>
                   <SelectItem value="magazine">Magazines</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-full sm:w-40">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Items</SelectItem>
+                  <SelectItem value="book">Books Only</SelectItem>
+                  <SelectItem value="magazine">Magazines Only</SelectItem>
+                  <SelectItem value="bundle">Bundles</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -803,6 +954,32 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           console.log("Apply price:", price);
           setIsPricingModalOpen(false);
           setPricingItem(null);
+        }}
+      />
+
+      <AsinMatchModal 
+        item={asinMatchItem}
+        isOpen={isAsinMatchModalOpen}
+        onClose={() => {
+          setIsAsinMatchModalOpen(false);
+          setAsinMatchItem(null);
+        }}
+        onSuccess={() => {
+          fetchInventory(); // Refresh to show ASIN badge
+        }}
+      />
+
+      <ItemEditModal 
+        open={editModalItem !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditModalItem(null);
+          }
+        }}
+        item={editModalItem}
+        onSave={(updatedItem) => {
+          setEditModalItem(null);
+          fetchInventory();
         }}
       />
     </div>

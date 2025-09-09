@@ -12,6 +12,7 @@ interface BatchSettings {
   autoGenerateTitle: boolean;
   autoGeneratePrice: boolean;
   skipPricing: boolean;
+  autoOptimize: boolean;
 }
 
 interface BatchSettingsModalProps {
@@ -145,6 +146,20 @@ export function BatchSettingsModal({ isOpen, onClose, onSettingsChange, currentS
                   onClick={() => updateSetting('skipPricing', !settings.skipPricing)}
                 >
                   {settings.skipPricing ? "SKIP" : "OFF"}
+                </Button>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-sm font-medium">Auto-optimize after OCR</Label>
+                  <p className="text-xs text-muted-foreground">Generate optimized titles & descriptions automatically</p>
+                </div>
+                <Button
+                  variant={settings.autoOptimize ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => updateSetting('autoOptimize', !settings.autoOptimize)}
+                >
+                  {settings.autoOptimize ? "ON" : "OFF"}
                 </Button>
               </div>
             </CardContent>

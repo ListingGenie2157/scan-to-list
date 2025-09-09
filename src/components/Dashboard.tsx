@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle, LogOut, User, Sparkles } from "lucide-react";
+import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle, LogOut, User, Sparkles, Settings } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,9 @@ import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
 import { ConnectEbayButton } from "./ConnectEbayButton";
+
+import { AutoListingSettings } from "./AutoListingSettings";
+import { ListingApprovalsPage } from "./ListingApprovalsPage";
 import { Navigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 
@@ -20,7 +23,7 @@ export const Dashboard = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [autoOpenScanner, setAutoOpenScanner] = useState(false);
   const [showBundleSuggestions, setShowBundleSuggestions] = useState(false);
-  const [activeTab, setActiveTab] = useState<"overview" | "inventory">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "inventory" | "auto-listing" | "approvals">("overview");
   const [ebayStatus, setEbayStatus] = useState<{
     connected: boolean;
     testing: boolean;
@@ -218,6 +221,18 @@ export const Dashboard = () => {
           >
             Inventory
           </Button>
+          <Button
+            variant={activeTab === "auto-listing" ? "default" : "ghost"}
+            onClick={() => setActiveTab("auto-listing")}
+          >
+            Auto-Listing
+          </Button>
+          <Button
+            variant={activeTab === "approvals" ? "default" : "ghost"}
+            onClick={() => setActiveTab("approvals")}
+          >
+            Approvals
+          </Button>
         </div>
 
         {activeTab === "overview" ? (
@@ -402,7 +417,7 @@ export const Dashboard = () => {
                     Upload New Photos
                   </Button>
                   <Button 
-                    variant="outline" 
+                    variant="gradient" 
                     size="lg" 
                     className="h-20 flex-col"
                     onClick={() => {
@@ -464,9 +479,13 @@ export const Dashboard = () => {
               </CardContent>
             </Card>
           </>
-        ) : (
+        ) : activeTab === "inventory" ? (
           <InventoryGrid ref={inventoryGridRef} />
-        )}
+        ) : activeTab === "auto-listing" ? (
+          <AutoListingSettings />
+        ) : activeTab === "approvals" ? (
+          <ListingApprovalsPage />
+        ) : null}
       </div>
 
 

@@ -13,7 +13,7 @@ export default function WebBarcodeScanner({ onCode, onClose, continuous = false,
 
   useEffect(() => {
     const hints = new Map();
-    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13, BarcodeFormat.UPC_A]);
+    hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13, BarcodeFormat.UPC_A, BarcodeFormat.EAN_8]);
     const reader = new BrowserMultiFormatReader(hints);
     let controls: any;
 
@@ -33,7 +33,15 @@ export default function WebBarcodeScanner({ onCode, onClose, continuous = false,
           videoRef.current!,
           (result) => {
             if (result) {
-              const text = result.getText().trim();
+              let text = result.getText().trim();
+              
+              // For EAN-13 codes, try to detect add-ons by looking for additional numbers
+              // This is a basic implementation - real scanners might capture add-ons differently
+              if (text.length === 13 && text.startsWith('977')) {
+                // This is likely a magazine with ISSN code - check if we can detect add-ons
+                // For now, we'll pass the base code and let the backend handle it
+              }
+              
               const now = Date.now();
               // Throttle duplicate reads within 2 seconds
               if (text === lastRef.current.code && now - lastRef.current.ts < 2000) return;

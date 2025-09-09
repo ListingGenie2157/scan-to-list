@@ -71,11 +71,20 @@ Return only JSON, matching this schema exactly (no extra keys):
   "ocr_quality": "good"|"fair"|"poor"|"failed",
   "all_visible_text": string
 }
-Rules:
+
+IMPORTANT CLASSIFICATION RULES:
+- If you see "Magazine", "Vol.", "Volume", "Issue", "No.", or monthly/quarterly dating, this is likely a MAGAZINE
+- If it has an issue number (like "#52", "Issue 12"), it's likely a MAGAZINE  
+- If it's a periodical publication (monthly, weekly, quarterly), it's a MAGAZINE
+- If it's a standalone book with chapters and ISBN, it's a BOOK
+- For magazines: extract issue_number, issue_date, and series_title carefully
+- For books: focus on title, author, ISBN, and publication details
+
+Other rules:
 - If multiple distinct items: is_bundle=true and fill bundle_* and individual_titles.
 - If single item: is_bundle=false; provide standard single-item fields.
 - confidence_score in [0,1].
-`;
+- Be very careful to distinguish between magazines and books based on visual cues`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -106,6 +115,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     if (!OPENAI_API_KEY) {
+      console.log("OPENAI_API_KEY missing - using fallback data");
       // Soft-fail: mark item for manual review, return 200 so the client doesn't see a random non-2xx
       const fallback = {
         title: "API Key Missing - Manual Review Needed",
@@ -115,13 +125,107 @@ serve(async (req) => {
         suggested_price: 10.0,
         ocr_quality: "failed",
       };
-      const { data: inventoryItem } = await supabase
+      
+      // 1) Try to get user_id and item_id from photo
+      const { data: photoRecord } = await supabase
+        .from("photos")
+        .select("user_id, item_id")
+        .eq("id", photoId)
+        .maybeSingle();
+
+      let userId = photoRecord?.user_id ?? null;
+      if (!userId) {
+        const { data: me } = await supabase.auth.getUser();
+        userId = me?.user?.id ?? null;
+      }
+      if (!userId) {
+        return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
+      }
+
+      console.log(`Processing photo ${photoId} for user ${userId}, existing item_id: ${photoRecord?.item_id}`);
+
+      // 2) Upsert inventory_items
+      const { data: inventoryItem, error: upErr } = await supabase
         .from("inventory_items")
-        .update({ ...fallback, processed_at: new Date().toISOString() })
-        .eq("photo_id", photoId)
+        .upsert(
+          {
+            user_id: userId,
+            photo_id: photoId,
+            ...fallback,
+            processed_at: new Date().toISOString(),
+            status: "photographed",
+          },
+          { onConflict: "user_id,photo_id" }
+        )
         .select()
         .maybeSingle();
-      return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: "OPENAI_API_KEY missing" });
+
+      if (upErr) {
+        console.error("inventory_items upsert failed:", upErr.message);
+        return json(200, {
+          success: false,
+          error: "DB upsert failed",
+          detail: upErr.message,
+        });
+      }
+
+      // 3) Sync to items table
+      let itemId = photoRecord?.item_id;
+      const itemData = {
+        user_id: userId,
+        title: fallback.title,
+        type: "book",
+        status: "draft",
+        suggested_price: fallback.suggested_price,
+        authors: null,
+        year: null,
+        isbn13: null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (itemId) {
+        // Update existing item
+        const { error: itemUpdateErr } = await supabase
+          .from("items")
+          .update(itemData)
+          .eq("id", itemId)
+          .eq("user_id", userId);
+        
+        if (itemUpdateErr) {
+          console.error("items update failed:", itemUpdateErr.message);
+        } else {
+          console.log(`Updated existing item ${itemId}`);
+        }
+      } else {
+        // Create new item and link photo
+        const { data: newItem, error: itemInsertErr } = await supabase
+          .from("items")
+          .insert(itemData)
+          .select("id")
+          .maybeSingle();
+
+        if (itemInsertErr) {
+          console.error("items insert failed:", itemInsertErr.message);
+        } else if (newItem) {
+          itemId = newItem.id;
+          console.log(`Created new item ${itemId}`);
+          
+          // Link photo to new item
+          const { error: photoUpdateErr } = await supabase
+            .from("photos")
+            .update({ item_id: itemId })
+            .eq("id", photoId)
+            .eq("user_id", userId);
+            
+          if (photoUpdateErr) {
+            console.error("photo item_id update failed:", photoUpdateErr.message);
+          } else {
+            console.log(`Linked photo ${photoId} to item ${itemId}`);
+          }
+        }
+      }
+
+      return json(200, { success: true, inventoryItem, extractedInfo: fallback, itemId, message: "OPENAI_API_KEY missing" });
     }
 
     // Call OpenAI Vision
@@ -158,6 +262,8 @@ serve(async (req) => {
 
     if (!resp || !resp.ok) {
       const errText = resp ? await resp.text() : "no response";
+      console.log("OpenAI API call failed:", errText);
+      
       // Soft-fail with DB update so your UI gets a 200 and a reason
       const fallback = {
         title: "OCR Processing Failed - Manual Review Needed",
@@ -167,13 +273,108 @@ serve(async (req) => {
         suggested_price: 10.0,
         ocr_quality: "failed",
       };
-      const { data: inventoryItem } = await supabase
+      
+      // 1) Try to get user_id and item_id from photo
+      const { data: photoRecord } = await supabase
+        .from("photos")
+        .select("user_id, item_id")
+        .eq("id", photoId)
+        .maybeSingle();
+
+      let userId = photoRecord?.user_id ?? null;
+      if (!userId) {
+        const { data: me } = await supabase.auth.getUser();
+        userId = me?.user?.id ?? null;
+      }
+      if (!userId) {
+        return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
+      }
+
+      console.log(`Processing failed photo ${photoId} for user ${userId}, existing item_id: ${photoRecord?.item_id}`);
+
+      // 2) Upsert inventory_items
+      const { data: inventoryItem, error: upErr } = await supabase
         .from("inventory_items")
-        .update({ ...fallback, processed_at: new Date().toISOString(), ocr_error: errText.slice(0, 500) })
-        .eq("photo_id", photoId)
+        .upsert(
+          {
+            user_id: userId,
+            photo_id: photoId,
+            ...fallback,
+            ocr_error: errText?.slice(0, 500) ?? null,
+            processed_at: new Date().toISOString(),
+            status: "photographed",
+          },
+          { onConflict: "user_id,photo_id" }
+        )
         .select()
         .maybeSingle();
-      return json(200, { success: true, inventoryItem, extractedInfo: fallback, message: `OCR failed: ${errText}` });
+
+      if (upErr) {
+        console.error("inventory_items upsert failed:", upErr.message);
+        return json(200, {
+          success: false,
+          error: "DB upsert failed",
+          detail: upErr.message,
+        });
+      }
+
+      // 3) Sync to items table
+      let itemId = photoRecord?.item_id;
+      const itemData = {
+        user_id: userId,
+        title: fallback.title,
+        type: "book",
+        status: "draft",
+        suggested_price: fallback.suggested_price,
+        authors: null,
+        year: null,
+        isbn13: null,
+        updated_at: new Date().toISOString(),
+      };
+
+      if (itemId) {
+        // Update existing item
+        const { error: itemUpdateErr } = await supabase
+          .from("items")
+          .update(itemData)
+          .eq("id", itemId)
+          .eq("user_id", userId);
+        
+        if (itemUpdateErr) {
+          console.error("items update failed:", itemUpdateErr.message);
+        } else {
+          console.log(`Updated existing item ${itemId}`);
+        }
+      } else {
+        // Create new item and link photo
+        const { data: newItem, error: itemInsertErr } = await supabase
+          .from("items")
+          .insert(itemData)
+          .select("id")
+          .maybeSingle();
+
+        if (itemInsertErr) {
+          console.error("items insert failed:", itemInsertErr.message);
+        } else if (newItem) {
+          itemId = newItem.id;
+          console.log(`Created new item ${itemId}`);
+          
+          // Link photo to new item
+          const { error: photoUpdateErr } = await supabase
+            .from("photos")
+            .update({ item_id: itemId })
+            .eq("id", photoId)
+            .eq("user_id", userId);
+            
+          if (photoUpdateErr) {
+            console.error("photo item_id update failed:", photoUpdateErr.message);
+          } else {
+            console.log(`Linked photo ${photoId} to item ${itemId}`);
+          }
+        }
+      }
+
+      return json(200, { success: true, inventoryItem, extractedInfo: fallback, itemId, message: `OCR failed: ${errText}` });
     }
 
     const body = await resp.json();
@@ -211,10 +412,38 @@ serve(async (req) => {
     } as const;
 
     const suggested_price = calculatePrice(cleaned);
+    console.log(`OCR extraction successful for photo ${photoId}, model: ${modelUsed}`);
 
+    // Check if auto-optimization is enabled in batch settings
+    const batchSettings = requestData?.batchSettings;
+    const shouldAutoOptimize = batchSettings?.autoOptimize === true;
+
+    // 1) Try to get user_id and item_id from photo
+    const { data: photoRecord } = await supabase
+      .from("photos")
+      .select("user_id, item_id")
+      .eq("id", photoId)
+      .maybeSingle();
+
+    let userId = photoRecord?.user_id ?? null;
+    if (!userId) {
+      const { data: me } = await supabase.auth.getUser();
+      userId = me?.user?.id ?? null;
+    }
+    if (!userId) {
+      return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
+    }
+
+    console.log(`Processing photo ${photoId} for user ${userId}, existing item_id: ${photoRecord?.item_id}`);
+
+    // 2) Upsert inventory_items with proper category classification
+    const suggested_category = (cleaned.genre?.toLowerCase().includes("magazine") || cleaned.issue_number) ? "magazine" : "book";
+    
     const { data: inventoryItem, error: dbErr } = await supabase
       .from("inventory_items")
-      .update({
+      .upsert({
+        user_id: userId,
+        photo_id: photoId,
         title: cleaned.title,
         subtitle: cleaned.subtitle,
         author: cleaned.author,
@@ -224,31 +453,143 @@ serve(async (req) => {
         genre: cleaned.genre,
         condition_assessment: cleaned.condition_assessment,
         suggested_price,
+        suggested_category,
         confidence_score: cleaned.confidence_score,
         issue_number: cleaned.issue_number,
         issue_date: cleaned.issue_date,
         series_title: cleaned.series_title,
         edition: cleaned.edition,
-        status: "photographed",
+        status: "processed",
         extracted_text: content,
         all_visible_text: cleaned.all_visible_text,
         ocr_quality: cleaned.ocr_quality,
         model_used: cleaned.model_used,
         processed_at: new Date().toISOString(),
+      }, {
+        onConflict: "user_id,photo_id"
       })
-      .eq("photo_id", photoId)
       .select()
-      .maybeSingle(); // don't 406 when no row
+      .maybeSingle();
 
     if (dbErr) {
-      // Still return 200 with a descriptive payload so the client doesn't just see "non-2xx"
+      console.error("inventory_items upsert failed:", dbErr.message);
       return json(200, { success: false, error: "DB update failed", detail: dbErr.message, extractedInfo: cleaned });
+    }
+
+    // 3) Sync to items table - map fields according to schema
+    let itemId = photoRecord?.item_id;
+    const itemData = {
+      user_id: userId,
+      title: cleaned.title || "Untitled",
+      type: (cleaned.genre?.toLowerCase().includes("magazine")) ? "magazine" : "book",
+      status: "processed",
+      suggested_price,
+      authors: cleaned.author ? [cleaned.author] : null,
+      year: cleaned.publication_year ? String(cleaned.publication_year) : null,
+      isbn13: cleaned.isbn && cleaned.isbn.length === 13 ? cleaned.isbn : null,
+      publisher: cleaned.publisher,
+      description: cleaned.all_visible_text?.slice(0, 500) || null,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (itemId) {
+      // Update existing item
+      const { error: itemUpdateErr } = await supabase
+        .from("items")
+        .update(itemData)
+        .eq("id", itemId)
+        .eq("user_id", userId);
+      
+      if (itemUpdateErr) {
+        console.error("items update failed:", itemUpdateErr.message);
+      } else {
+        console.log(`Updated existing item ${itemId} with OCR data`);
+      }
+    } else {
+      // Create new item and link photo
+      const { data: newItem, error: itemInsertErr } = await supabase
+        .from("items")
+        .insert(itemData)
+        .select("id")
+        .maybeSingle();
+
+      if (itemInsertErr) {
+        console.error("items insert failed:", itemInsertErr.message);
+      } else if (newItem) {
+        itemId = newItem.id;
+        console.log(`Created new item ${itemId} with OCR data`);
+        
+        // Link photo to new item
+        const { error: photoUpdateErr } = await supabase
+          .from("photos")
+          .update({ item_id: itemId })
+          .eq("id", photoId)
+          .eq("user_id", userId);
+          
+        if (photoUpdateErr) {
+          console.error("photo item_id update failed:", photoUpdateErr.message);
+        } else {
+          console.log(`Linked photo ${photoId} to item ${itemId}`);
+        }
+      }
+    }
+
+    // If auto-optimization is enabled, call generate-ebay-listing
+    if (shouldAutoOptimize && inventoryItem) {
+      console.log(`Auto-optimizing item ${inventoryItem.id} after OCR completion`);
+      
+      try {
+        const { data: optimizeResult, error: optimizeError } = await supabase.functions.invoke('generate-ebay-listing', {
+          body: {
+            itemData: {
+              title: cleaned.title,
+              author: cleaned.author,
+              publisher: cleaned.publisher,
+              publication_year: cleaned.publication_year,
+              condition: cleaned.condition_assessment,
+              category: suggested_category,
+              isbn: cleaned.isbn,
+              genre: cleaned.genre,
+              issue_number: cleaned.issue_number,
+              issue_date: cleaned.issue_date
+            },
+            userId: userId
+          }
+        });
+
+        if (optimizeError) {
+          console.error('Auto-optimization failed:', optimizeError);
+        } else if (optimizeResult?.success && optimizeResult?.optimizedListing) {
+          console.log('Auto-optimization successful, updating inventory item');
+          
+          // Update inventory item with optimized data
+          const optimizeUpdatePayload: any = {
+            suggested_title: optimizeResult.optimizedListing.title,
+            description: optimizeResult.optimizedListing.description,
+          };
+
+          if (optimizeResult.optimizedListing.price) {
+            optimizeUpdatePayload.suggested_price = optimizeResult.optimizedListing.price;
+          }
+
+          await supabase
+            .from('inventory_items')
+            .update(optimizeUpdatePayload)  
+            .eq('id', inventoryItem.id);
+            
+          console.log(`Auto-optimized item ${inventoryItem.id} with AI-generated content`);
+        }
+      } catch (optimizeErr) {
+        console.error('Auto-optimization exception:', optimizeErr);
+      }
     }
 
     return json(200, {
       success: true,
       inventoryItem,
+      itemId,
       extractedInfo: { ...cleaned, suggested_price },
+      autoOptimized: shouldAutoOptimize
     });
   } catch (e) {
     // Final safety net: never leak a bare 500 without context

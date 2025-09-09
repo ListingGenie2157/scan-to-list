@@ -25,8 +25,14 @@ export function ConnectEbayButton() {
   };
 
   return (
-    <Button className="h-10" onClick={startOAuth} disabled={loading}>
-      {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <LinkIcon className="w-4 h-4 mr-2" />}
+    <Button 
+      variant="gradient" 
+      size="lg" 
+      onClick={startOAuth} 
+      disabled={loading}
+      className="h-20 flex-col"
+    >
+      {loading ? <Loader2 className="w-6 h-6 mb-2 animate-spin" /> : <LinkIcon className="w-6 h-6 mb-2" />}
       {loading ? "Connecting…" : "Connect eBay"}
     </Button>
   );

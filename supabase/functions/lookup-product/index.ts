@@ -39,6 +39,13 @@ serve(async (req) => {
       if (!productInfo) {
         productInfo = await lookupOpenLibrary(codeToUse);
       }
+    } else if (norm.kind === 'EAN13_MAGAZINE') {
+      // For magazine barcodes (977 prefix), lookup in UPC database but mark as magazine
+      productInfo = await lookupUPCDatabase(codeToUse);
+      if (productInfo) {
+        productInfo.type = 'magazine';
+        productInfo.addon = norm.addon || null;
+      }
     } else if (norm.kind === 'UPCA' || norm.kind === 'UNKNOWN') {
       // For UPC-A or unknown codes, attempt a basic UPC database lookup.
       // This handles magazines and generic products where only a UPC is available.
@@ -53,7 +60,9 @@ serve(async (req) => {
     // Build a simplified meta response (or null if not found)
     const meta = productInfo ? {
       type: productInfo.type,
-      isbn13: codeToUse,
+      isbn13: productInfo.type === 'magazine' ? null : codeToUse,
+      barcode: codeToUse,
+      barcode_addon: productInfo.addon ?? null,
       title: productInfo.title ?? null,
       authors: productInfo.authors ?? null,
       publisher: productInfo.publisher ?? null,
@@ -79,13 +88,32 @@ serve(async (req) => {
   }
 });
 
-function normalize(raw: string): { kind: 'ISBN13' | 'ISBN10' | 'UPCA' | 'UNKNOWN'; code: string } {
+function normalize(raw: string): { kind: 'ISBN13' | 'ISBN10' | 'UPCA' | 'EAN13_MAGAZINE' | 'UNKNOWN'; code: string; addon?: string } {
   const s = raw.replace(/[\s-]/g, '');
   const d = s.replace(/[^0-9Xx]/g, '');
-  if (d.length === 18 && (d.startsWith('978') || d.startsWith('979'))) return { kind: 'ISBN13', code: d.slice(0, 13) }; // EAN13+EAN5
+  
+  // EAN13+EAN5 addon (18 digits total)
+  if (d.length === 18 && (d.startsWith('978') || d.startsWith('979'))) {
+    return { kind: 'ISBN13', code: d.slice(0, 13), addon: d.slice(13) };
+  }
+  if (d.length === 18 && d.startsWith('977')) {
+    return { kind: 'EAN13_MAGAZINE', code: d.slice(0, 13), addon: d.slice(13) };
+  }
+  
+  // EAN13+EAN2 addon (15 digits total)
+  if (d.length === 15 && (d.startsWith('978') || d.startsWith('979'))) {
+    return { kind: 'ISBN13', code: d.slice(0, 13), addon: d.slice(13) };
+  }
+  if (d.length === 15 && d.startsWith('977')) {
+    return { kind: 'EAN13_MAGAZINE', code: d.slice(0, 13), addon: d.slice(13) };
+  }
+  
+  // Standard lengths
   if (d.length === 13 && (d.startsWith('978') || d.startsWith('979'))) return { kind: 'ISBN13', code: d };
+  if (d.length === 13 && d.startsWith('977')) return { kind: 'EAN13_MAGAZINE', code: d };
   if (d.length === 10) return { kind: 'ISBN10', code: d.toUpperCase() };
   if (d.length === 12) return { kind: 'UPCA', code: d };
+  
   return { kind: 'UNKNOWN', code: d };
 }
 
@@ -156,9 +184,24 @@ async function lookupUPCDatabase(barcode: string) {
     
     if (data.items && data.items.length > 0) {
       const item = data.items[0];
+      
+      // Enhanced magazine detection
+      const title = item.title?.toLowerCase() || '';
+      const category = item.category?.toLowerCase() || '';
+      const description = item.description?.toLowerCase() || '';
+      
+      const isMagazine = 
+        title.includes('magazine') ||
+        title.includes('issue') ||
+        title.includes('vol.') ||
+        title.includes('volume') ||
+        category.includes('magazine') ||
+        category.includes('periodical') ||
+        description.includes('magazine') ||
+        /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b/i.test(title);
+      
       return {
-        // Mark UPC lookups as generic products. Clients may override to 'magazine' if desired.
-        type: 'product',
+        type: isMagazine ? 'magazine' : 'product',
         title: item.title,
         authors: null,
         publisher: item.brand,
@@ -166,7 +209,7 @@ async function lookupUPCDatabase(barcode: string) {
         isbn: null,
         description: item.description,
         categories: item.category ? [item.category] : null,
-        format: 'Magazine/Product',
+        format: isMagazine ? 'Magazine' : 'Product',
         genre: item.category,
         suggested_price: null,
       };

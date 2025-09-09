@@ -39,7 +39,7 @@ serve(async (req) => {
     }
 
     // Create a detailed prompt for eBay listing optimization
-    const isMagazine = genre?.toLowerCase().includes('magazine') || category?.toLowerCase().includes('magazine');
+    const isMagazine = genre?.toLowerCase().includes('magazine') || category?.toLowerCase().includes('magazine') || issue_number;
     
     const prompt = `Create an SEO-optimized eBay listing for this ${isMagazine ? 'magazine' : 'item'}:
 
@@ -53,8 +53,10 @@ ISBN: ${isbn || 'Not available'}
 Genre: ${genre || 'Unknown'}
 
 Please generate:
-1. An eBay title (max 80 characters) that includes key searchable terms and follows eBay best practices
-   ${isMagazine ? '- For magazines: Include magazine name, issue number/date, and year for maximum searchability' : '- For books: Include title, author, and key descriptive terms'}
+1. An eBay title that is EXACTLY 80 characters or less (prefer 76-80) that includes:
+   ${isMagazine ? '- MUST include the word "Magazine" right after the magazine name' : '- Book title and author'}
+   ${isMagazine ? '- Structure: "{Magazine Name} Magazine {Month YYYY} Issue {#} – {Main Topic}"' : '- Include key descriptive terms'}
+   ${isMagazine ? '- Include month/year/issue number if available' : '- Include author and key descriptive terms'}
    - Use relevant keywords that collectors and buyers search for
    - Include condition if space allows
    ${userPreferences?.title_prefixes?.length ? `- MUST include these prefixes: ${userPreferences.title_prefixes.join(', ')}` : ''}
@@ -69,6 +71,7 @@ Please generate:
    - Appeals to collectors and enthusiasts
    - Mentions shipping and return policy basics
 
+CRITICAL: Ensure the title is exactly 80 characters or less. Count characters carefully.
 Format your response as JSON with "title" and "description" fields. Do not include pricing in your response as that will be calculated separately.`;
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -102,6 +105,36 @@ Format your response as JSON with "title" and "description" fields. Do not inclu
     let optimizedListing;
     try {
       optimizedListing = JSON.parse(generatedContent);
+      
+      // Post-process title to ensure 80 char limit and magazine requirements
+      if (optimizedListing.title) {
+        let processedTitle = optimizedListing.title;
+        
+        // For magazines, ensure "Magazine" is included
+        if (isMagazine && !processedTitle.toLowerCase().includes('magazine')) {
+          const titleParts = processedTitle.split(' ');
+          if (titleParts.length > 0) {
+            titleParts.splice(1, 0, 'Magazine');
+            processedTitle = titleParts.join(' ');
+          }
+        }
+        
+        // Truncate to 80 characters without cutting words
+        if (processedTitle.length > 80) {
+          const words = processedTitle.split(' ');
+          let truncated = '';
+          for (const word of words) {
+            if ((truncated + word).length <= 80) {
+              truncated += (truncated ? ' ' : '') + word;
+            } else {
+              break;
+            }
+          }
+          processedTitle = truncated;
+        }
+        
+        optimizedListing.title = processedTitle;
+      }
     } catch (parseError) {
       // Fallback if JSON parsing fails
       optimizedListing = {
@@ -153,31 +186,27 @@ async function getMarketBasedPricing(itemData: any): Promise<number | null> {
       return null;
     }
 
-    // Call the ebay-app-search edge function
-    const base = Deno.env.get("SUPABASE_URL")!.replace(".supabase.co", ".functions.supabase.co");
-    const pricingUrl = `${base}/ebay-app-search`;
+    // Call the ebay-app-search edge function using Supabase client
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
     
-    const response = await fetch(pricingUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    const { data: response, error: pricingError } = await supabase.functions.invoke('ebay-app-search', {
+      body: {
         isbn: isbn || undefined,
         query: !isbn ? searchQuery : undefined
-      })
+      }
     });
 
-    if (!response.ok) {
-      console.error('eBay pricing function error:', response.status, response.statusText);
+    if (pricingError) {
+      console.error('eBay pricing function error:', pricingError);
       return null;
     }
 
-    const pricingData = await response.json();
-    
-    if (pricingData.success && pricingData.suggestedPrice) {
-      console.log('Got pricing from eBay:', pricingData.suggestedPrice);
-      return pricingData.suggestedPrice;
+    if (response?.success && response?.suggestedPrice) {
+      console.log('Got pricing from eBay:', response.suggestedPrice);
+      return response.suggestedPrice;
     } else {
       console.log('No pricing data returned from eBay function');
       return null;

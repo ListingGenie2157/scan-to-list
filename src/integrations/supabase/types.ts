@@ -7,13 +7,46 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instanciate createClient with right options
+  // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "12.2.12 (cd3cf9e)"
   }
   public: {
     Tables: {
+      auto_listing_settings: {
+        Row: {
+          created_at: string
+          daily_limit: number
+          enabled: boolean
+          id: string
+          schedule_time: string
+          timezone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_limit?: number
+          enabled?: boolean
+          id?: string
+          schedule_time?: string
+          timezone?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_limit?: number
+          enabled?: boolean
+          id?: string
+          schedule_time?: string
+          timezone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       bundles: {
         Row: {
           bundle_name: string
@@ -22,7 +55,7 @@ export type Database = {
           created_at: string | null
           id: string
           total_items: number | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           bundle_name: string
@@ -31,7 +64,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           total_items?: number | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           bundle_name?: string
@@ -40,7 +73,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           total_items?: number | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -52,6 +85,27 @@ export type Database = {
           },
         ]
       }
+      comps_cache_actives: {
+        Row: {
+          cache_key: string
+          created_at: string
+          payload: Json
+          q: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          payload: Json
+          q: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          payload?: Json
+          q?: string
+        }
+        Relationships: []
+      }
       csv_exports: {
         Row: {
           created_at: string | null
@@ -61,7 +115,7 @@ export type Database = {
           id: string
           item_count: number
           storage_path: string | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string | null
@@ -71,7 +125,7 @@ export type Database = {
           id?: string
           item_count: number
           storage_path?: string | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string | null
@@ -81,7 +135,7 @@ export type Database = {
           id?: string
           item_count?: number
           storage_path?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -92,6 +146,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ebay_tokens: {
+        Row: {
+          access_expires_at: string
+          access_token: string
+          refresh_token: string
+          scopes: string
+          user_id: string
+        }
+        Insert: {
+          access_expires_at: string
+          access_token: string
+          refresh_token: string
+          scopes: string
+          user_id: string
+        }
+        Update: {
+          access_expires_at?: string
+          access_token?: string
+          refresh_token?: string
+          scopes?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       extractions: {
         Row: {
@@ -131,6 +209,9 @@ export type Database = {
       inventory_items: {
         Row: {
           all_visible_text: string | null
+          amazon_asin: string | null
+          amazon_match_confidence: number | null
+          amazon_title: string | null
           author: string | null
           bundle_id: string | null
           condition_assessment: string | null
@@ -165,10 +246,13 @@ export type Database = {
           title: string | null
           topic: string | null
           updated_at: string | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           all_visible_text?: string | null
+          amazon_asin?: string | null
+          amazon_match_confidence?: number | null
+          amazon_title?: string | null
           author?: string | null
           bundle_id?: string | null
           condition_assessment?: string | null
@@ -203,10 +287,13 @@ export type Database = {
           title?: string | null
           topic?: string | null
           updated_at?: string | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           all_visible_text?: string | null
+          amazon_asin?: string | null
+          amazon_match_confidence?: number | null
+          amazon_title?: string | null
           author?: string | null
           bundle_id?: string | null
           condition_assessment?: string | null
@@ -241,7 +328,7 @@ export type Database = {
           title?: string | null
           topic?: string | null
           updated_at?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -278,7 +365,9 @@ export type Database = {
           id: number
           isbn10: string | null
           isbn13: string | null
+          last_priced_at: string | null
           last_scanned_at: string | null
+          pricing_confidence: number | null
           publisher: string | null
           quantity: number | null
           source: string | null
@@ -300,7 +389,9 @@ export type Database = {
           id?: number
           isbn10?: string | null
           isbn13?: string | null
+          last_priced_at?: string | null
           last_scanned_at?: string | null
+          pricing_confidence?: number | null
           publisher?: string | null
           quantity?: number | null
           source?: string | null
@@ -322,7 +413,9 @@ export type Database = {
           id?: number
           isbn10?: string | null
           isbn13?: string | null
+          last_priced_at?: string | null
           last_scanned_at?: string | null
+          pricing_confidence?: number | null
           publisher?: string | null
           quantity?: number | null
           source?: string | null
@@ -344,6 +437,42 @@ export type Database = {
           },
         ]
       }
+      listing_drafts: {
+        Row: {
+          approved_at: string | null
+          created_at: string
+          ebay_listing_id: string | null
+          id: string
+          item_id: string
+          listed_at: string | null
+          listing_data: Json
+          status: string
+          user_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          created_at?: string
+          ebay_listing_id?: string | null
+          id?: string
+          item_id: string
+          listed_at?: string | null
+          listing_data: Json
+          status?: string
+          user_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          created_at?: string
+          ebay_listing_id?: string | null
+          id?: string
+          item_id?: string
+          listed_at?: string | null
+          listing_data?: Json
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       listing_queues: {
         Row: {
           created_at: string | null
@@ -352,7 +481,7 @@ export type Database = {
           priority_score: number | null
           queue_date: string
           status: string | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string | null
@@ -361,7 +490,7 @@ export type Database = {
           priority_score?: number | null
           queue_date: string
           status?: string | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string | null
@@ -370,7 +499,7 @@ export type Database = {
           priority_score?: number | null
           queue_date?: string
           status?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -388,6 +517,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          state_token: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          state_token: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          state_token?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       oauth_tokens: {
         Row: {
@@ -438,7 +591,7 @@ export type Database = {
           thumb_url: string | null
           uploaded_at: string | null
           url_public: string | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           batch_id?: string | null
@@ -452,7 +605,7 @@ export type Database = {
           thumb_url?: string | null
           uploaded_at?: string | null
           url_public?: string | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           batch_id?: string | null
@@ -466,7 +619,7 @@ export type Database = {
           thumb_url?: string | null
           uploaded_at?: string | null
           url_public?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -500,7 +653,7 @@ export type Database = {
           status: string | null
           total_images: number
           updated_at: string | null
-          user_id: string | null
+          user_id: string
         }
         Insert: {
           created_at?: string | null
@@ -509,7 +662,7 @@ export type Database = {
           status?: string | null
           total_images: number
           updated_at?: string | null
-          user_id?: string | null
+          user_id: string
         }
         Update: {
           created_at?: string | null
@@ -518,7 +671,7 @@ export type Database = {
           status?: string | null
           total_images?: number
           updated_at?: string | null
-          user_id?: string | null
+          user_id?: string
         }
         Relationships: [
           {
@@ -529,6 +682,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      service_tokens: {
+        Row: {
+          access_token: string
+          expires_at: string
+          provider: string
+        }
+        Insert: {
+          access_token: string
+          expires_at: string
+          provider: string
+        }
+        Update: {
+          access_token?: string
+          expires_at?: string
+          provider?: string
+        }
+        Relationships: []
       }
       user_profiles: {
         Row: {
@@ -577,12 +748,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      cleanup_expired_oauth_states: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       update_title_preferences: {
         Args: {
-          user_id_param: string
+          custom_text?: string
           prefixes?: string[]
           suffixes?: string[]
-          custom_text?: string
+          user_id_param: string
         }
         Returns: undefined
       }
