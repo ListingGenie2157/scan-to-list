@@ -28,3 +28,110 @@ curl -i --location --request POST 'https://<PROJECT-REF>.supabase.co/functions/v
     --header 'Content-Type: application/json' \
     --data '{"search":"vehicles"}'
 ```
+
+## Operational Endpoints (Scan-to-List)
+
+These helper endpoints make it easier to verify OAuth setup, check RLS visibility, and safely mirror external images into Storage.
+
+### 1) OAuth health (validate RuName mapping and scopes)
+
+- Path: `/functions/v1/oauth-health`
+- Method: `GET`
+- Auth: Required (Authorization bearer token for the signed-in user)
+
+Example:
+
+```bash
+curl -s \
+  -H "Authorization: Bearer <SUPABASE_SESSION_ACCESS_TOKEN>" \
+  "https://<PROJECT-REF>.supabase.co/functions/v1/oauth-health"
+```
+
+Response:
+
+```json
+{
+  "success": true,
+  "callbackUrl": "https://<PROJECT-REF>.supabase.co/functions/v1/ebay-oauth-callback",
+  "scopes": [
+    "https://api.ebay.com/oauth/api_scope",
+    "https://api.ebay.com/oauth/api_scope/sell.inventory",
+    "https://api.ebay.com/oauth/api_scope/sell.account.readonly"
+  ]
+}
+```
+
+Use this to confirm your eBay portal RuName (Redirect URI) exactly matches `callbackUrl`, and that only the intended SELL scopes are present.
+
+### 2) Inventory health (RLS visibility quick check)
+
+- Path: `/functions/v1/inventory-health`
+- Method: `GET`
+- Auth: Required
+
+Example:
+
+```bash
+curl -s \
+  -H "Authorization: Bearer <SUPABASE_SESSION_ACCESS_TOKEN>" \
+  "https://<PROJECT-REF>.supabase.co/functions/v1/inventory-health"
+```
+
+Response (example):
+
+```json
+{
+  "success": true,
+  "rls_visible": {
+    "items": true,
+    "photos": true,
+    "inventory_items": true
+  }
+}
+```
+
+### 3) Mirror cover (server-side image fetch to Storage)
+
+- Path: `/functions/v1/mirror-cover`
+- Method: `POST`
+- Auth: Required
+
+Body:
+
+```json
+{
+  "itemId": 123,
+  "type": "magazine", // "book" | "magazine" | "bundle"
+  "sourceUrl": "https://example.com/image.jpg"
+}
+```
+
+Example:
+
+```bash
+curl -s -X POST \
+  -H "Authorization: Bearer <SUPABASE_SESSION_ACCESS_TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"itemId":123,"type":"magazine","sourceUrl":"https://example.com/image.jpg"}' \
+  "https://<PROJECT-REF>.supabase.co/functions/v1/mirror-cover"
+```
+
+Response (example):
+
+```json
+{
+  "success": true,
+  "public_url": "https://<PROJECT-REF>.supabase.co/storage/v1/object/public/photos/<path>",
+  "thumb_url": "https://<PROJECT-REF>.supabase.co/storage/v1/object/public/photos/<path>"
+}
+```
+
+### 4) CSV exports are private + signed URLs
+
+- The `exports` Storage bucket is private. Export endpoints return short‑lived signed URLs.
+- Ensure your client always fetches using the returned `download_url`.
+
+### 5) process-book-cover auth posture
+
+- `process-book-cover` is protected with `verify_jwt = true` and derives the user from the Authorization header.
+- It returns `200 { success: boolean, ... }` payloads to avoid raw 500s in clients.
