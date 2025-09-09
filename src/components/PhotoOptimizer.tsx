@@ -3,11 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sparkles, Loader2, Download, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { pipeline, env } from '@huggingface/transformers';
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
-// Configure transformers.js
-env.allowLocalModels = false;
-env.useBrowserCache = false;
+// Heavy ML libraries are loaded on-demand when needed
 
 const MAX_IMAGE_DIMENSION = 1024;
 
@@ -21,7 +20,9 @@ interface PhotoOptimizerProps {
 export function PhotoOptimizer({ open, onOpenChange, imageUrl, onOptimizedImage }: PhotoOptimizerProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [optimizedImageUrl, setOptimizedImageUrl] = useState<string | null>(null);
+  const [useAiRemoval, setUseAiRemoval] = useState(false);
   const { toast } = useToast();
+  const supportsWebGPU = typeof navigator !== 'undefined' && (navigator as any).gpu;
 
   const loadImage = (url: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {
@@ -86,10 +87,12 @@ export function PhotoOptimizer({ open, onOpenChange, imageUrl, onOptimizedImage 
     }
   };
 
-  const removeBackground = async (imageElement: HTMLImageElement): Promise<HTMLCanvasElement> => {
-    const segmenter = await pipeline('image-segmentation', 'Xenova/segformer-b0-finetuned-ade-512-512', {
-      device: 'webgpu',
-    });
+  const removeBackground = async (imageElement: HTMLImageElement, preferWebGPU: boolean): Promise<HTMLCanvasElement> => {
+    const { pipeline, env } = await import('@huggingface/transformers');
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+    const device = preferWebGPU ? 'webgpu' : 'wasm';
+    const segmenter = await pipeline('image-segmentation', 'Xenova/segformer-b0-finetuned-ade-512-512', { device });
     
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
@@ -158,17 +161,17 @@ export function PhotoOptimizer({ open, onOpenChange, imageUrl, onOptimizedImage 
       // Step 2: Crop to content
       cropToContent(canvas, ctx);
       
-      // Step 3: Try background removal (optional)
-      try {
-        const bgRemovedCanvas = await removeBackground(img);
-        // If successful, use the background-removed version
-        canvas.width = bgRemovedCanvas.width;
-        canvas.height = bgRemovedCanvas.height;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.drawImage(bgRemovedCanvas, 0, 0);
-      } catch (bgError) {
-        console.log('Background removal failed, using brightened/cropped version:', bgError);
-        // Continue with the brightened/cropped version
+      // Step 3: Optional AI background removal (lazy-loaded)
+      if (useAiRemoval) {
+        try {
+          const bgRemovedCanvas = await removeBackground(img, !!supportsWebGPU);
+          canvas.width = bgRemovedCanvas.width;
+          canvas.height = bgRemovedCanvas.height;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(bgRemovedCanvas, 0, 0);
+        } catch (bgError) {
+          console.log('Background removal failed, using brightened/cropped version:', bgError);
+        }
       }
       
       // Convert to blob
@@ -275,6 +278,10 @@ export function PhotoOptimizer({ open, onOpenChange, imageUrl, onOptimizedImage 
         </div>
         
         <div className="flex flex-wrap gap-3 pt-4">
+          <div className="flex items-center gap-2">
+            <Switch id="ai-removal" checked={useAiRemoval} onCheckedChange={setUseAiRemoval} />
+            <Label htmlFor="ai-removal">AI Background Removal (beta){!supportsWebGPU ? ' • slower on this device' : ''}</Label>
+          </div>
           <Button 
             onClick={optimizePhoto} 
             disabled={isProcessing}
