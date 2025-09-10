@@ -92,6 +92,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
         .select(`
           id,
           title,
+          subtitle,
           author,
           status,
           suggested_category,
@@ -107,6 +108,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           genre,
           series_title,
           issue_number,
+          issue_date,
           suggested_title
         `)
         .eq('user_id', user?.id)
@@ -165,7 +167,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             isbn: item.isbn ?? null,
             issue_number: item.issue_number ?? null,
             issue_date: item.issue_date ?? null,
-            series_title: item.series_title ?? null,
+            series_title: item.subtitle ?? null,
             created_at: item.created_at,
             confidence_score: item.confidence_score ?? null,
             photos: item.photo_id ? photosMap[item.photo_id] : null,

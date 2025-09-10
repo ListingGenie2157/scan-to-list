@@ -15,10 +15,12 @@ interface MagazineIssueModalProps {
 }
 
 export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: MagazineIssueModalProps) {
-  const [seriesTitle, setSeriesTitle] = useState(meta.title || '');
-  const [issueNumber, setIssueNumber] = useState('');
-  const [coverMonth, setCoverMonth] = useState('');
-  const [coverYear, setCoverYear] = useState(new Date().getFullYear().toString());
+  const [publicationName, setPublicationName] = useState(meta.title || '');
+  const [issueTitle, setIssueTitle] = useState('');
+  const [issueNumber, setIssueNumber] = useState((meta as any).inferred_issue || '');
+  const [coverMonth, setCoverMonth] = useState((meta as any).inferred_month || '');
+  const [coverYear, setCoverYear] = useState((meta as any).inferred_year || new Date().getFullYear().toString());
+  const [specialIssue, setSpecialIssue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
@@ -28,23 +30,32 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
   ];
 
   const handleConfirm = async () => {
-    if (!seriesTitle.trim()) {
-      toast({ title: 'Missing Information', description: 'Series title is required', variant: 'destructive' });
+    if (!publicationName.trim()) {
+      toast({ title: 'Missing Information', description: 'Publication name is required', variant: 'destructive' });
       return;
     }
 
     setIsLoading(true);
     try {
       // Enhance the metadata with user-provided details
-      const enhancedTitle = issueNumber && coverMonth && coverYear 
-        ? `${seriesTitle} - ${coverMonth} ${coverYear} (Issue ${issueNumber})`
-        : `${seriesTitle}${issueNumber ? ` - Issue ${issueNumber}` : ''}`;
+      const issueBits = [
+        issueNumber ? `Issue ${issueNumber}` : null,
+        specialIssue ? specialIssue : null,
+      ].filter(Boolean).join(' • ');
+      const dateBit = coverMonth && coverYear ? `${coverMonth} ${coverYear}` : (coverYear ? coverYear : '');
+      const enhancedTitle = [publicationName, issueTitle, issueNumber ? `Issue ${issueNumber}` : null, dateBit].filter(Boolean).join(' - ');
 
       const enhancedMeta: NonNullable<LookupMeta> = {
         ...meta,
-        title: enhancedTitle,
+        title: publicationName,
+        issue_title: issueTitle || null,
         year: coverYear,
         type: 'magazine',
+        // Keep the addon and barcode; preserve suggested price if provided from backend
+        suggested_price: (meta as any).suggested_price ?? null,
+        // Explicit magazine fields for persistence
+        issue_number: issueNumber || (meta as any).inferred_issue || null,
+        issue_date: dateBit || null,
       };
 
       onConfirm(enhancedMeta);
@@ -66,17 +77,27 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
         
         <div className="space-y-4">
           <div className="text-sm text-muted-foreground">
-            Barcode: {meta.barcode}
-            {meta.barcode_addon && ` (Add-on: ${meta.barcode_addon})`}
+            Barcode: {(meta as any).barcode}
+            {(meta as any).barcode_addon && ` (Add-on: ${(meta as any).barcode_addon})`}
           </div>
           
           <div className="space-y-2">
-            <Label htmlFor="series-title">Series Title *</Label>
+            <Label htmlFor="publication-name">Publication Name *</Label>
             <Input
-              id="series-title"
-              value={seriesTitle}
-              onChange={(e) => setSeriesTitle(e.target.value)}
-              placeholder="e.g., National Geographic"
+              id="publication-name"
+              value={publicationName}
+              onChange={(e) => setPublicationName(e.target.value)}
+              placeholder="e.g., Time Magazine, National Geographic"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="issue-title">Issue Title (optional)</Label>
+            <Input
+              id="issue-title"
+              value={issueTitle}
+              onChange={(e) => setIssueTitle(e.target.value)}
+              placeholder="e.g., The World of AI"
             />
           </div>
 
@@ -87,6 +108,16 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
               value={issueNumber}
               onChange={(e) => setIssueNumber(e.target.value)}
               placeholder="e.g., 123 or Vol 45 No 3"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="special-issue">Special Issue (optional)</Label>
+            <Input
+              id="special-issue"
+              value={specialIssue}
+              onChange={(e) => setSpecialIssue(e.target.value)}
+              placeholder="e.g., Holiday Edition, Collector's Issue"
             />
           </div>
 

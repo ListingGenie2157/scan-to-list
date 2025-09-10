@@ -76,28 +76,29 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   const processBarcode = async (barcodeRaw: string) => {
     try {
       const normalized = normalizeScan(barcodeRaw);
-      let codeToUse: string | null = normalized;
-      // If normalization returns null, attempt to treat the raw digits as a UPC/product code
       if (!normalized) {
-        const rawDigits = String(barcodeRaw).replace(/\D/g, '');
-        if (rawDigits.length === 12) {
-          codeToUse = rawDigits;
-        }
-      }
-      if (!codeToUse) {
         toast({ title: 'Invalid code', description: 'Unsupported barcode. Please scan a valid ISBN-13 or UPC.', variant: 'destructive' });
         return;
       }
 
       // Lookup product info using our Supabase edge function. It will handle books, magazines and generic UPCs.
-      const meta = await lookupIsbn(codeToUse);
+      const meta = await lookupIsbn(normalized);
       if (!meta) {
         toast({ title: 'Not found', description: 'No details found for this code.', variant: 'destructive' });
         return;
       }
 
       // Check if this is a magazine that needs disambiguation
-      if (meta.type === 'magazine' && meta.barcode && (!meta.title || meta.title.toLowerCase().includes('magazine'))) {
+      if (
+        meta.type === 'magazine' && meta.barcode && 
+        (
+          !meta.title ||
+          meta.title.toLowerCase().includes('magazine') ||
+          // Trigger disambiguation if an add-on exists or title lacks series markers
+          (!!meta.barcode_addon) ||
+          !/(issue|vol\.?|volume|no\.?|\b\d{4}\b|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(meta.title)
+        )
+      ) {
         // Show magazine issue modal for generic magazine results
         setPendingMagazineMeta(meta);
         setShowMagazineModal(true);

@@ -57,6 +57,21 @@ serve(async (req) => {
     // Read-only: no database writes performed here.
 
 
+    // Attempt to parse magazine add-on data (issue/month/price)
+    let inferred: { inferred_month?: string | null; inferred_year?: string | null; inferred_issue?: string | null; suggested_price?: number | null } = {};
+    if ((norm.kind === 'EAN13_MAGAZINE') && norm.addon) {
+      const parsed = parseMagazineAddon(norm.addon);
+      inferred = { ...parsed };
+    }
+
+    // Also try to infer month/year from title/description text for magazines
+    if (productInfo && productInfo.type === 'magazine') {
+      const fromTitle = parseMonthYearFromText(String(productInfo.title || ''));
+      const fromDesc = parseMonthYearFromText(String(productInfo.description || ''));
+      inferred.inferred_month = inferred.inferred_month || fromTitle.month || fromDesc.month || null;
+      inferred.inferred_year = inferred.inferred_year || fromTitle.year || fromDesc.year || null;
+    }
+
     // Build a simplified meta response (or null if not found)
     const meta = productInfo ? {
       type: productInfo.type,
@@ -66,10 +81,15 @@ serve(async (req) => {
       title: productInfo.title ?? null,
       authors: productInfo.authors ?? null,
       publisher: productInfo.publisher ?? null,
-      year: productInfo.publication_year ?? null,
+      year: productInfo.publication_year ?? inferred.inferred_year ?? null,
       coverUrl: productInfo.coverUrl ?? null,
       description: productInfo.description ?? null,
       categories: productInfo.categories ?? null,
+      // inferred fields for magazines
+      inferred_month: inferred.inferred_month ?? null,
+      inferred_year: inferred.inferred_year ?? null,
+      inferred_issue: inferred.inferred_issue ?? null,
+      suggested_price: typeof inferred.suggested_price === 'number' ? inferred.suggested_price : null,
     } : null;
 
     return new Response(JSON.stringify(meta), {
@@ -123,6 +143,43 @@ function isbn10to13(isbn10: string): string {
   for (let i = 0; i < 12; i++) sum += (+core[i]) * (i % 2 ? 3 : 1);
   const check = (10 - (sum % 10)) % 10;
   return core + check;
+}
+
+// Parse EAN-2 or EAN-5 add-ons for magazines.
+// Common conventions:
+// - EAN-2: often encodes issue number or week number (00-99). We'll expose as inferred_issue.
+// - EAN-5: often encodes price (xxxxy => xxxx currency/price + checksum). We'll parse to a numeric price in USD if plausible.
+function parseMagazineAddon(addon: string): { inferred_month?: string | null; inferred_year?: string | null; inferred_issue?: string | null; suggested_price?: number | null } {
+  let inferred_month: string | null = null;
+  let inferred_year: string | null = null;
+  let inferred_issue: string | null = null;
+  let suggested_price: number | null = null;
+
+  if (/^\d{2}$/.test(addon)) {
+    // EAN-2: could be issue number; we expose as-is
+    inferred_issue = addon;
+  } else if (/^\d{5}$/.test(addon)) {
+    // EAN-5: price encoding varies by publisher. A common pattern encodes price in cents in the first 4 digits.
+    // We will attempt a safe parse: first 4 digits as cents, last digit checksum ignored.
+    const cents = parseInt(addon.slice(0, 4), 10);
+    if (Number.isFinite(cents) && cents > 0) {
+      suggested_price = Math.round(cents) / 100;
+    }
+  }
+
+  return { inferred_month, inferred_year, inferred_issue, suggested_price };
+}
+
+function parseMonthYearFromText(text: string): { month?: string | null; year?: string | null } {
+  const months = [
+    'January','February','March','April','May','June','July','August','September','October','November','December'
+  ];
+  const lower = text.toLowerCase();
+  const monthIndex = months.findIndex(m => lower.includes(m.toLowerCase()) || lower.includes(m.slice(0,3).toLowerCase()));
+  const yearMatch = text.match(/\b(19|20)\d{2}\b/);
+  const month = monthIndex >= 0 ? months[monthIndex] : null;
+  const year = yearMatch ? yearMatch[0] : null;
+  return { month, year };
 }
 
 async function lookupGoogleBooks(isbn: string) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
-import { BarcodeFormat, DecodeHintType } from "@zxing/library";
+import { BarcodeFormat, DecodeHintType, ResultMetadataType } from "@zxing/library";
 
 export default function WebBarcodeScanner({ onCode, onClose, continuous = false, overlayLines = [] }: {
   onCode: (c: string) => void;
@@ -14,6 +14,8 @@ export default function WebBarcodeScanner({ onCode, onClose, continuous = false,
   useEffect(() => {
     const hints = new Map();
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13, BarcodeFormat.UPC_A, BarcodeFormat.EAN_8]);
+    // Enable detection of EAN-2/EAN-5 add-on extensions (magazine issue/price)
+    hints.set(DecodeHintType.ALLOWED_EAN_EXTENSIONS as any, [2, 5]);
     const reader = new BrowserMultiFormatReader(hints);
     let controls: any;
 
@@ -34,6 +36,15 @@ export default function WebBarcodeScanner({ onCode, onClose, continuous = false,
           (result) => {
             if (result) {
               let text = result.getText().trim();
+              try {
+                const meta: any = result.getResultMetadata?.();
+                if (meta && typeof meta.get === 'function') {
+                  const ext = meta.get(ResultMetadataType.UPC_EAN_EXTENSION as any);
+                  if (ext && /^(\d{2}|\d{5})$/.test(String(ext))) {
+                    text = text + String(ext);
+                  }
+                }
+              } catch {}
               
               // For EAN-13 codes, try to detect add-ons by looking for additional numbers
               // This is a basic implementation - real scanners might capture add-ons differently

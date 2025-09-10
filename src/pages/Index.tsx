@@ -1,5 +1,3 @@
-import { ConnectEbayButton } from "@/components/ConnectEbayButton";
-
 import { Dashboard } from "@/components/Dashboard";
 
 const Index = () => {
@@ -7,3 +5,4 @@ const Index = () => {
 };
 
 export default Index;
+
