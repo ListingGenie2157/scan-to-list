@@ -29,4 +29,3 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: false, error: String(e) }), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
   }
 });
-

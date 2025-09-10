@@ -135,3 +135,4 @@ Response (example):
 
 - `process-book-cover` is protected with `verify_jwt = true` and derives the user from the Authorization header.
 - It returns `200 { success: boolean, ... }` payloads to avoid raw 500s in clients.
+

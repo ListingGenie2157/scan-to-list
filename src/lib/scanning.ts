@@ -19,6 +19,10 @@ export type LookupMeta = {
   inferred_year?: string | null;
   inferred_issue?: string | null;
   // explicit magazine fields provided by UI
+  // Additional magazine-specific fields
+  inferred_month?: string | null;
+  inferred_year?: string | null;
+  inferred_issue?: string | null;
   issue_title?: string | null;
   issue_number?: string | null;
   issue_date?: string | null;
@@ -36,6 +40,21 @@ export function normalizeScan(raw: string): string | null {
   }
   if (digits.length === 15 && (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977"))) {
     return digits; // EAN-13 + EAN-2 addon
+  // EAN-13 + EAN-5 addon (18 digits) -> for magazines (977 prefix), preserve add-on
+  if (digits.length === 18 && digits.startsWith("977")) {
+    return digits; // Keep full barcode with add-on for magazines
+  }
+  // EAN-13 + EAN-5 addon for books -> trim to 13
+  if (digits.length === 18 && (digits.startsWith("978") || digits.startsWith("979"))) {
+    digits = digits.slice(0, 13);
+  }
+  // Some scanners include spaces/plus, handled above. If pure 15 with add-on, also trim for books
+  if (digits.length === 15) {
+    if (digits.startsWith("977")) {
+      return digits; // Keep magazine codes with add-ons
+    } else if (digits.startsWith("978") || digits.startsWith("979")) {
+      digits = digits.slice(0, 13);
+    }
   }
 
   // If ISBN10 -> convert to ISBN13
@@ -46,6 +65,11 @@ export function normalizeScan(raw: string): string | null {
   // Accept EAN-13 (books 978/979 and magazines 977)
   if (digits.length === 13 && (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977"))) {
     return digits;
+  // Accept EAN-13 for books and magazines
+  if (digits.length === 13) {
+    if (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977")) {
+      return digits;
+    }
   }
 
   // Accept 12-digit UPC codes
@@ -83,6 +107,16 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
   // Determine final type: user preference > detected type > default book
   const finalType = userItemType || meta.type || 'book';
 
+  // For magazines, compose title with issue information
+  let composedTitle = meta.title;
+  if (finalType === 'magazine') {
+    const titleParts = [meta.title];
+    if (meta.issue_title) titleParts.push(meta.issue_title);
+    if (meta.issue_number) titleParts.push(`Issue ${meta.issue_number}`);
+    if (meta.issue_date) titleParts.push(meta.issue_date);
+    composedTitle = titleParts.filter(Boolean).join(' - ');
+  }
+
   // For magazines, use barcode for lookups instead of isbn13
   const isBookWithIsbn = finalType === 'book' && meta.isbn13;
   const isMagazineWithBarcode = finalType === 'magazine' && meta.barcode;
@@ -113,7 +147,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
   if (existing) {
     const updateData: any = {
       quantity: (existing.quantity ?? 1) + 1,
-      title: meta.title ?? null,
+      title: composedTitle ?? null,
       publisher: meta.publisher ?? null,
       authors: meta.authors ?? null,
       year: meta.year ?? null,
@@ -134,6 +168,10 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
       .update(updateData)
       .eq('id', existing.id);
     if (updErr) throw updErr;
+    
+    // Sync to inventory_items table
+    await syncToInventoryItems(existing.id, updateData, user.id);
+    
     return existing.id as unknown as number;
   } else {
     // Build a composed title for magazines: Publication - Issue Title - Issue X - Month Year
@@ -151,6 +189,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
       user_id: user.id,
       type: finalType,
       title: finalType === 'magazine' ? (composedTitle ?? (meta.title ?? null)) : (meta.title ?? null),
+      title: composedTitle ?? null,
       publisher: meta.publisher ?? null,
       authors: meta.authors ?? null,
       year: meta.year ?? null,
@@ -206,11 +245,48 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
     }
 
     await maybeGenerateAndSavePrice(newId, meta, newInventoryId);
+    
+    // Sync to inventory_items table
+    await syncToInventoryItems(newId, insertData, user.id);
+    
+    await maybeGenerateAndSavePrice(newId, meta);
     return newId;
   }
 }
 
 async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<LookupMeta>, inventoryItemId?: string) {
+async function syncToInventoryItems(itemId: number, itemData: any, userId: string) {
+  try {
+    // Sync to inventory_items table for dual table management
+    const inventoryData = {
+      item_id: itemId,
+      user_id: userId,
+      title: itemData.title,
+      subtitle: itemData.issue_title || null,
+      publisher: itemData.publisher,
+      authors: itemData.authors,
+      year: itemData.year,
+      quantity: itemData.quantity || 1,
+      type: itemData.type,
+      status: itemData.status || 'draft',
+      isbn13: itemData.isbn13,
+      cover_url: itemData.cover_url_ext,
+      last_updated: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from('inventory_items')
+      .upsert(inventoryData, { onConflict: 'item_id' });
+    
+    if (error && !error.message.includes('does not exist')) {
+      console.warn('Failed to sync to inventory_items:', error);
+    }
+  } catch (err) {
+    console.warn('Inventory sync error:', err);
+  }
+}
+
+async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<LookupMeta>) {
   // Attempt to generate a price using multiple strategies. We prefer pulling
   // real-world pricing data via our eBay proxy function if an ISBN or
   // reasonable query is available. If that fails, fall back to the
@@ -276,6 +352,12 @@ export async function storeCover(itemId: number, coverUrl: string, type: 'book' 
   });
   if (error) throw error;
   // optional: could return data for UI
+  // Use mirror-cover edge function for simpler cover storage
+  const { data, error } = await supabase.functions.invoke('mirror-cover', {
+    body: { itemId, coverUrl, type }
+  });
+  if (error) throw error;
+  return data;
 }
 
 async function createThumbnail(file: Blob, maxSize: number): Promise<Blob> {
