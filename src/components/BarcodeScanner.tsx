@@ -218,9 +218,10 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
       try {
         await processBarcode(code);
       } finally {
-        if (!isMounted.current) return;
-        setIsProcessing(false);
-        setShowWebScanner(false);
+        if (isMounted.current) {
+          setIsProcessing(false);
+          setShowWebScanner(false);
+        }
       }
     },
     [addLastScan, batchMode, beep, processBarcode, shouldThrottle]
