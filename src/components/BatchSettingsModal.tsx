@@ -34,9 +34,9 @@ export function BatchSettingsModal({ isOpen, onClose, onSettingsChange, currentS
     onClose();
   };
 
-  const updateSetting = (key: keyof BatchSettings, value: any) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
-  };
+    const updateSetting = <K extends keyof BatchSettings>(key: K, value: BatchSettings[K]) => {
+      setSettings(prev => ({ ...prev, [key]: value }));
+    };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>

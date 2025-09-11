@@ -10,22 +10,10 @@ import { normalizeScan, lookupIsbn, upsertItem, storeCover } from '@/lib/scannin
 import { useScannerSettings } from '@/hooks/useScannerSettings';
 import { useItemTypeSetting } from '@/hooks/useItemTypeSetting';
 import { MagazineIssueModal } from '@/components/MagazineIssueModal';
+import { ScanMeta, ItemType } from '@/types/scan';
 
 interface BarcodeScannerProps {
   onScanSuccess?: (data: ScanMeta) => void;
-}
-
-type ItemType = 'book' | 'magazine' | 'bundle';
-type MetaType = 'book' | 'magazine' | 'product';
-
-interface ScanMeta {
-  type: MetaType;
-  title?: string | null;
-  barcode?: string | null;
-  barcode_addon?: string | null;
-  isbn13?: string | null;
-  coverUrl?: string | null;
-  // add other fields as needed by upsertItem
 }
 
 const DUPLICATE_WINDOW_MS = 2000;
@@ -46,7 +34,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   const [showMagazineModal, setShowMagazineModal] = useState(false);
   const [pendingMagazineMeta, setPendingMagazineMeta] = useState<ScanMeta | null>(null);
 
-  const recentSet = useRef<Map<string, number>>(new Map());
+  const recentSet = useRef<Map<string, number>>(new Map<string, number>());
   const { toast } = useToast();
   const { mirrorCovers, setMirrorCovers } = useScannerSettings();
   const { itemType } = useItemTypeSetting();
@@ -59,7 +47,11 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
     return () => {
       isMounted.current = false;
       if (audioCtxRef.current) {
-        try { audioCtxRef.current.close(); } catch {}
+        try {
+          audioCtxRef.current.close();
+        } catch (error: unknown) {
+          console.warn('Failed to close audio context', error);
+        }
         audioCtxRef.current = null;
       }
     };
@@ -137,7 +129,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
         if (mirrorCovers && meta.coverUrl) {
           try {
             await storeCover(itemId, meta.coverUrl, finalItemType);
-          } catch (e) {
+          } catch (e: unknown) {
             console.warn('Cover mirror failed:', e);
           }
         }
@@ -147,7 +139,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
           toast({ title: 'Saved', description: `Saved ${displayCode} – ${meta.title || 'Untitled'}` });
           onScanSuccess?.(meta);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Save error:', error);
         if (isMounted.current) {
           toast({ title: 'Error', description: 'Failed to save item', variant: 'destructive' });
@@ -197,7 +189,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
         }
 
         await completeSave(meta);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Barcode processing error:', error);
         if (isMounted.current) {
           toast({ title: 'Error', description: 'Failed to process barcode', variant: 'destructive' });
@@ -215,8 +207,10 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
 
       if (batchMode) {
         addLastScan(code);
-        // Fire and forget to keep scanning fluid
-        processBarcode(code).catch(() => {});
+          // Fire and forget to keep scanning fluid
+          processBarcode(code).catch(() => {
+            /* errors are toasted */
+          });
         return;
       }
 

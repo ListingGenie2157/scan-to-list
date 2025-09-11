@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,10 +7,21 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Check, X, ExternalLink } from 'lucide-react';
 
+interface ListingData {
+  title: string;
+  author: string;
+  publisher: string;
+  year: string;
+  isbn: string;
+  price: number;
+  condition: string;
+  description: string;
+}
+
 interface ListingDraft {
   id: string;
   item_id: string;
-  listing_data: any;
+  listing_data: ListingData;
   status: string;
   created_at: string;
   approved_at?: string;
@@ -25,13 +36,7 @@ export const ListingApprovalsPage = () => {
   const [loading, setLoading] = useState(true);
   const [processingDrafts, setProcessingDrafts] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (user) {
-      loadDrafts();
-    }
-  }, [user]);
-
-  const loadDrafts = async () => {
+  const loadDrafts = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('listing_drafts')
@@ -52,7 +57,13 @@ export const ListingApprovalsPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, toast]);
+
+  useEffect(() => {
+    if (user) {
+      loadDrafts();
+    }
+  }, [user, loadDrafts]);
 
   const handleDraftAction = async (draftId: string, action: 'approve' | 'reject') => {
     setProcessingDrafts(prev => new Set(prev).add(draftId));

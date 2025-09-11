@@ -70,12 +70,16 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
             continue;
           }
 
-          if (result?.success && result?.optimizedListing) {
-            // Update inventory item with optimized data
-            const updatePayload: any = {
-              suggested_title: result.optimizedListing.title,
-              description: result.optimizedListing.description,
-            };
+            if (result?.success && result?.optimizedListing) {
+              // Update inventory item with optimized data
+              const updatePayload: {
+                suggested_title: string;
+                description: string;
+                suggested_price?: number;
+              } = {
+                suggested_title: result.optimizedListing.title,
+                description: result.optimizedListing.description,
+              };
 
             if (result.optimizedListing.price) {
               updatePayload.suggested_price = result.optimizedListing.price;
@@ -132,10 +136,10 @@ export function BulkEditModal({ isOpen, onClose, selectedItems, onBulkUpdateComp
 
     setIsUpdating(true);
     try {
-      // Build the update object with only selected fields
-      const updates: any = {};
-      if (updateData.category) updates.type = updateData.category;
-      if (updateData.status) updates.status = updateData.status;
+        // Build the update object with only selected fields
+        const updates: { type?: string; status?: string } = {};
+        if (updateData.category) updates.type = updateData.category;
+        if (updateData.status) updates.status = updateData.status;
 
       const { error } = await supabase
         .from('items')

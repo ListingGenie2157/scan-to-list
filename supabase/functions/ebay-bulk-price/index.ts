@@ -141,7 +141,7 @@ serve(async (req)=>{
       };
       let activePrice;
       let analytics;
-      let notes = [];
+      const notes: string[] = [];
       if (token && (body.strategy === "ACTIVE_LISTINGS" || body.strategy === "MIN_OF")) {
         const r = await priceFromActive(token, q, condition, limit, includeShipping);
         if (typeof r.price === "number") activePrice = r.price;

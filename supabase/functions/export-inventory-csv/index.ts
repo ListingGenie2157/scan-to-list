@@ -82,7 +82,17 @@ serve(async (req) => {
     ];
 
     // Generate CSV rows
-    const rows = items.map((item: any) => [
+    interface ExportItem {
+      title?: string;
+      suggested_title?: string;
+      description?: string;
+      ebay_category_id?: string;
+      condition_assessment?: string;
+      suggested_price?: number;
+      photos?: { public_url?: string } | null;
+    }
+
+    const rows = items.map((item: ExportItem) => [
       item.title || item.suggested_title || '',
       item.description || '',
       item.ebay_category_id ?? '',

@@ -22,7 +22,7 @@ export function PhotoOptimizer({ open, onOpenChange, imageUrl, onOptimizedImage 
   const [optimizedImageUrl, setOptimizedImageUrl] = useState<string | null>(null);
   const [useAiRemoval, setUseAiRemoval] = useState(false);
   const { toast } = useToast();
-  const supportsWebGPU = typeof navigator !== 'undefined' && (navigator as any).gpu;
+  const supportsWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator;
 
   const loadImage = (url: string): Promise<HTMLImageElement> => {
     return new Promise((resolve, reject) => {

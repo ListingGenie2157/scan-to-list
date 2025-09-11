@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, forwardRef, useImperativeHandle, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,37 +15,54 @@ import { BulkEditModal } from "@/components/BulkEditModal";
 import EbayPricingModal from "@/components/EbayPricingModal";
 import { AsinMatchModal } from "@/components/AsinMatchModal";
 import { ItemEditModal } from "@/components/ItemEditModal";
+import type { InventoryItem, PhotoInfo } from "@/types/inventory";
 
-interface InventoryItem {
-  id: string;
+interface InventoryRow {
+  id: string | number;
   title: string | null;
+  subtitle?: string | null;
   author: string | null;
-  status: string;
-  suggested_category: string | null; // mapped from items.type
-  suggested_price: number | null; // not used with items
-  suggested_title: string | null;
+  status: string | null;
+  suggested_category: string | null;
+  suggested_price: number | null;
   publisher: string | null;
   publication_year: number | null;
-  condition_assessment: string | null;
-  genre: string | null;
   isbn: string | null;
+  created_at: string;
+  amazon_asin: string | null;
+  amazon_title: string | null;
+  amazon_match_confidence: number | null;
+  photo_id: string | null;
+  genre: string | null;
+  series_title: string | null;
   issue_number: string | null;
   issue_date: string | null;
-  series_title: string | null;
+  suggested_title: string | null;
+  confidence_score?: number | null;
+  condition_assessment?: string | null;
+}
+
+interface PhotoRow {
+  id: string;
+  public_url: string | null;
+  thumb_url: string | null;
+  url_public?: string | null;
+}
+
+interface OldItemRow {
+  id: string | number;
+  title: string | null;
+  authors: string[] | null;
+  status: string | null;
+  type: string | null;
+  quantity: number | null;
+  last_scanned_at: string | null;
   created_at: string;
-  photos: {
-    public_url: string | null;
-    thumb_url?: string | null;
-  } | null;
-  confidence_score: number | null;
-  // extras from items
-  type?: string | null;
-  quantity?: number | null;
-  last_scanned_at?: string | null;
-  // Amazon fields
-  amazon_asin?: string | null;
-  amazon_title?: string | null;
-  amazon_match_confidence?: number | null;
+  publisher: string | null;
+  year: number | null;
+  isbn13: string | null;
+  suggested_price: number | null;
+  photos: PhotoInfo[] | null;
 }
 
 export interface InventoryGridRef {
@@ -74,17 +91,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
   const [editModalItem, setEditModalItem] = useState<InventoryItem | null>(null);
   const { toast } = useToast();
 
-  useImperativeHandle(ref, () => ({
-    refreshInventory: fetchInventory
-  }));
-
-  useEffect(() => {
-    if (user) {
-      fetchInventory();
-    }
-  }, [user]);
-
-  const fetchInventory = async () => {
+  const fetchInventory = useCallback(async () => {
     try {
       // Try to fetch from inventory_items first (new table structure)
       const { data: inventoryData, error: inventoryError } = await supabase
@@ -118,25 +125,26 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       if (!inventoryError && inventoryData && inventoryData.length > 0) {
         // New inventory_items structure
         const photoIds = inventoryData.map(item => item.photo_id).filter(Boolean);
-        
+
         // Fetch photos for all items at once
-        let photosMap: Record<string, any> = {};
+        let photosMap: Record<string, PhotoInfo> = {};
         if (photoIds.length > 0) {
           const { data: photosData } = await supabase
             .from('photos')
             .select('id, public_url, thumb_url, url_public')
             .in('id', photoIds);
-          
-          photosMap = photosData?.reduce((acc, photo) => {
-            acc[photo.id] = {
-              public_url: photo.public_url || photo.url_public,
-              thumb_url: photo.thumb_url
-            };
-            return acc;
-          }, {}) || {};
+
+          photosMap =
+            photosData?.reduce<Record<string, PhotoInfo>>((acc, photo: PhotoRow) => {
+              acc[photo.id] = {
+                public_url: photo.public_url || photo.url_public || null,
+                thumb_url: photo.thumb_url ?? null
+              };
+              return acc;
+            }, {}) || {};
         }
 
-        const mapped = inventoryData.map((item: any) => {
+        const mapped = inventoryData.map((item: InventoryRow) => {
           // Determine category/type
           let category = item.suggested_category;
           let type = item.suggested_category;
@@ -211,7 +219,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       if (error) {
         console.error('Error fetching inventory:', error);
       } else {
-        const mapped = (data || []).map((it: any) => {
+        const mapped = (data || []).map((it: OldItemRow) => {
           const firstPhoto = Array.isArray(it.photos) ? it.photos[0] : null;
           return {
             id: String(it.id),
@@ -240,16 +248,26 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
             amazon_asin: null,
             amazon_title: null,
             amazon_match_confidence: null,
-          } as any;
+          } as InventoryItem;
         });
         setInventory(mapped);
       }
-    } catch (error) {
-      console.error('Error fetching inventory:', error);
-    } finally {
-      setLoading(false);
+      } catch (error) {
+        console.error('Error fetching inventory:', error);
+      } finally {
+        setLoading(false);
+      }
+    }, [user]);
+
+  useImperativeHandle(ref, () => ({
+    refreshInventory: fetchInventory
+  }));
+
+  useEffect(() => {
+    if (user) {
+      fetchInventory();
     }
-  };
+  }, [user, fetchInventory]);
 
   const filteredInventory = inventory.filter(item => {
     const title = item.title || item.suggested_category || 'Untitled';
@@ -385,7 +403,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    (input as any).capture = 'environment';
+      input.setAttribute('capture', 'environment');
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file || !user?.id) return;
@@ -657,7 +675,7 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                  <div className="flex items-center gap-1">
                    <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
                    {getTypeBadge(item.type)}
-                   {(item as any).amazon_asin && (
+                    {item.amazon_asin && (
                     <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs">
                       ASIN
                     </Badge>

@@ -79,6 +79,9 @@ function heuristicPrice({ title, authors, year }: { title?: string; authors?: st
   return Math.round(base * 100) / 100;
 }
 
-function json(body: any, status = 200) {
-  return new Response(JSON.stringify(body), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status });
+function json<T>(body: T, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    status,
+  });
 }

@@ -126,7 +126,17 @@ serve(async (req) => {
   }
 });
 
-async function createEbayListing(accessToken: string, listingData: any) {
+interface ListingInput {
+  title: string;
+  price: number | string;
+  description?: string;
+  author?: string;
+  categoryId?: string;
+  isbn?: string;
+  condition?: string;
+}
+
+async function createEbayListing(accessToken: string, listingData: ListingInput) {
   try {
     console.log('Creating eBay listing with data:', JSON.stringify(listingData, null, 2));
     

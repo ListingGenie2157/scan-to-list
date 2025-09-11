@@ -147,7 +147,7 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
       toast({ title: 'Scan saved', description: `${codeToUse} → ${meta.title || 'Untitled'}` });
       onUploadSuccess?.();
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.warn('lookup-product error', err);
       toast({ title: 'Lookup Error', description: 'Failed to lookup or save product', variant: 'destructive' });
     }
@@ -304,12 +304,13 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
               variant: "destructive"
             });
           }
-        } catch (ocrError: any) {
-          console.error('OCR processing exception:', ocrError);
+        } catch (ocrError: unknown) {
+          const err = ocrError as Error;
+          console.error('OCR processing exception:', err);
           toast({
             title: "OCR Exception",
-            description: `OCR failed with exception: ${ocrError.message}`,
-            variant: "destructive"
+            description: `OCR failed with exception: ${err.message}`,
+            variant: "destructive",
           });
         }
       }
