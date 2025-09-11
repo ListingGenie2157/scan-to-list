@@ -35,10 +35,11 @@ export function ConnectEbayButton() {
       // same tab to satisfy iOS gesture rules
       window.location.href = data.authorizeUrl;
       return;
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
       toast({
         title: "eBay connect failed",
-        description: e?.message || "Please try again.",
+        description: message || "Please try again.",
         variant: "destructive",
       });
       setLoading(false);

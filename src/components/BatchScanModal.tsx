@@ -10,12 +10,13 @@ import WebBarcodeScanner from '@/components/WebBarcodeScanner';
 import { normalizeScan, lookupIsbn, upsertItem, storeCover } from '@/lib/scanning';
 import { useScannerSettings } from '@/hooks/useScannerSettings';
 import { useItemTypeSetting } from '@/hooks/useItemTypeSetting';
+import { ScanMeta } from '@/types/scan';
 
-interface BatchScanModalProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSuccess?: (data: any) => void;
-}
+  interface BatchScanModalProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    onSuccess?: (data: ScanMeta) => void;
+  }
 
 export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModalProps) {
   const [showWebScanner, setShowWebScanner] = useState(false);
@@ -30,20 +31,26 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
     setLastScans((prev) => [...prev.slice(-5), line]); // Keep last 5 scans
   };
 
-  const beep = () => {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.connect(g); g.connect(ctx.destination);
-      o.type = 'sine'; o.frequency.value = 880;
-      g.gain.setValueAtTime(0.0001, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
-      o.start();
-      g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
-      o.stop(ctx.currentTime + 0.12);
-    } catch {}
-  };
+    const beep = () => {
+      try {
+        interface WindowWithWebkitAudio extends Window {
+          webkitAudioContext: typeof AudioContext;
+        }
+        const AudioCtx = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext;
+        const ctx = new AudioCtx();
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.connect(g); g.connect(ctx.destination);
+        o.type = 'sine'; o.frequency.value = 880;
+        g.gain.setValueAtTime(0.0001, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+        o.start();
+        g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.12);
+        o.stop(ctx.currentTime + 0.12);
+      } catch (error: unknown) {
+        console.warn('Beep failed:', error);
+      }
+    };
 
   const handleWebCode = async (code: string) => {
     const now = Date.now();
@@ -54,8 +61,10 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
     beep();
     addLastScan(code);
     
-    // Process in background without stopping scanner
-    processBarcode(code).catch(() => {/* errors are toasted */});
+      // Process in background without stopping scanner
+      processBarcode(code).catch((err: unknown) => {
+        console.error('Background process error:', err);
+      });
   };
 
   const processBarcode = async (barcodeRaw: string) => {
@@ -79,7 +88,7 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
         return;
       }
 
-      const meta = await lookupIsbn(codeToUse);
+        const meta = await lookupIsbn(codeToUse) as ScanMeta | null;
       if (!meta) {
         toast({ 
           title: 'Not found', 
@@ -97,9 +106,9 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
       if (mirrorCovers && meta.coverUrl) {
         try {
           await storeCover(itemId, meta.coverUrl, finalItemType);
-        } catch (e) {
-          console.warn('Cover mirror failed:', e);
-        }
+          } catch (e: unknown) {
+            console.warn('Cover mirror failed:', e);
+          }
       }
 
       setProcessedCount(prev => prev + 1);
@@ -110,8 +119,8 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
       });
       
       onSuccess?.(meta);
-    } catch (error) {
-      console.error('Batch scan error:', error);
+      } catch (error: unknown) {
+        console.error('Batch scan error:', error);
       toast({ 
         title: 'Processing error', 
         description: `Failed to process: ${barcodeRaw}`,

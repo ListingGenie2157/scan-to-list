@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +20,19 @@ interface BundleSuggestion {
   selling_points: string[];
 }
 
+interface SelectedItem {
+  id: string;
+  title: string;
+  author: string | null;
+  suggested_price: number;
+}
+
+interface ItemRecord {
+  id: number;
+  title: string | null;
+  authors: (string | null)[] | null;
+}
+
 interface BundleSuggestionsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -30,17 +43,11 @@ export const BundleSuggestionsModal = ({ isOpen, onClose }: BundleSuggestionsMod
   const { toast } = useToast();
   const [suggestions, setSuggestions] = useState<BundleSuggestion[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedItems, setSelectedItems] = useState<{[key: string]: any}>({});
+  const [selectedItems, setSelectedItems] = useState<Record<string, SelectedItem>>({});
 
-  useEffect(() => {
-    if (isOpen && user) {
-      fetchBundleSuggestions();
-    }
-  }, [isOpen, user]);
-
-  const fetchBundleSuggestions = async () => {
+  const fetchBundleSuggestions = useCallback(async () => {
     if (!user) return;
-    
+
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('analyze-inventory-bundles', {
@@ -51,28 +58,28 @@ export const BundleSuggestionsModal = ({ isOpen, onClose }: BundleSuggestionsMod
 
       if (data?.success) {
         setSuggestions(data.suggestions || []);
-        
+
         // Fetch item details for display
-          const allItemIds = data.suggestions.flatMap((s: BundleSuggestion) => s.item_ids);
-          if (allItemIds.length > 0) {
-            const { data: items } = await supabase
-              .from('items')
-              .select('id, title, authors')
-              .in('id', allItemIds.map((id: string) => Number(id)));
-            
-            if (items) {
-              const itemsMap = items.reduce((acc: {[key: string]: any}, it: any) => {
-                acc[String(it.id)] = {
-                  id: String(it.id),
-                  title: it.title ?? 'Untitled',
-                  author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,
-                  suggested_price: 0,
-                };
-                return acc;
-              }, {} as {[key: string]: any});
-              setSelectedItems(itemsMap);
-            }
+        const allItemIds = data.suggestions.flatMap((s: BundleSuggestion) => s.item_ids);
+        if (allItemIds.length > 0) {
+          const { data: items } = await supabase
+            .from('items')
+            .select('id, title, authors')
+            .in('id', allItemIds.map((id: string) => Number(id))) as { data: ItemRecord[] | null };
+
+          if (items) {
+            const itemsMap = items.reduce<Record<string, SelectedItem>>((acc, it: ItemRecord) => {
+              acc[String(it.id)] = {
+                id: String(it.id),
+                title: it.title ?? 'Untitled',
+                author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,
+                suggested_price: 0,
+              };
+              return acc;
+            }, {});
+            setSelectedItems(itemsMap);
           }
+        }
       }
     } catch (error) {
       console.error('Error fetching bundle suggestions:', error);
@@ -84,7 +91,13 @@ export const BundleSuggestionsModal = ({ isOpen, onClose }: BundleSuggestionsMod
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, toast]);
+
+  useEffect(() => {
+    if (isOpen && user) {
+      fetchBundleSuggestions();
+    }
+  }, [isOpen, user, fetchBundleSuggestions]);
 
   const createBundle = async (suggestion: BundleSuggestion) => {
     if (!user) return;

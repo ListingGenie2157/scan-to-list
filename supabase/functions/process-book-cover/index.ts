@@ -36,7 +36,14 @@ function toIntOrNull(v: unknown) {
   return Number.isFinite(n) ? n : null;
 }
 
-function calculatePrice(info: any): number {
+interface PriceInfo {
+  genre?: string;
+  publication_year?: number;
+  condition_assessment?: string;
+  series_title?: string;
+}
+
+function calculatePrice(info: PriceInfo): number {
   const isMagazine = info.genre?.toLowerCase().includes("magazine");
   const isVintage = info.publication_year && info.publication_year < 1990;
   let base = isMagazine ? 8.0 : 15.0;
@@ -90,15 +97,19 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
 
   try {
-    let requestData: any = null;
+    let requestData: {
+      photoId?: string;
+      imageUrl?: string;
+      batchSettings?: { autoOptimize?: boolean };
+    } = {};
     try {
       requestData = await req.json();
     } catch (e) {
       return json(400, { success: false, error: "Invalid JSON in request body", detail: String(e) });
     }
 
-    const photoId = cleanStr(requestData?.photoId);
-    const imageUrl = cleanStr(requestData?.imageUrl);
+    const photoId = cleanStr(requestData.photoId);
+    const imageUrl = cleanStr(requestData.imageUrl);
 
     if (!photoId || !imageUrl) {
       return json(400, {
@@ -384,30 +395,47 @@ serve(async (req) => {
     }
 
     // Because response_format=json_object, content should be valid JSON
-    let extracted: any = {};
-    try { extracted = JSON.parse(content); } catch { extracted = {}; }
+    let extracted: Record<string, unknown> = {};
+    try {
+      extracted = JSON.parse(content) as Record<string, unknown>;
+    } catch {
+      extracted = {};
+    }
 
     const cleaned = {
       item_count: toIntOrNull(extracted.item_count) ?? 1,
       is_bundle: Boolean(extracted.is_bundle),
-      bundle_title: cleanStr(extracted.bundle_title),
-      bundle_description: cleanStr(extracted.bundle_description),
-      individual_titles: Array.isArray(extracted.individual_titles) ? extracted.individual_titles : null,
-      title: cleanStr(extracted.title),
-      subtitle: cleanStr(extracted.subtitle),
-      author: cleanStr(extracted.author) || (extracted.is_bundle ? "Various" : null),
-      publisher: cleanStr(extracted.publisher) || (extracted.is_bundle ? "Various" : null),
+      bundle_title: cleanStr(extracted.bundle_title as string | undefined),
+      bundle_description: cleanStr(extracted.bundle_description as string | undefined),
+      individual_titles: Array.isArray(extracted.individual_titles)
+        ? (extracted.individual_titles as unknown[]).map(String)
+        : null,
+      title: cleanStr(extracted.title as string | undefined),
+      subtitle: cleanStr(extracted.subtitle as string | undefined),
+      author:
+        cleanStr(extracted.author as string | undefined) ||
+        (extracted.is_bundle ? "Various" : null),
+      publisher:
+      cleanStr(extracted.publisher as string | undefined) ||
+        (extracted.is_bundle ? "Various" : null),
       publication_year: toIntOrNull(extracted.publication_year),
-      isbn: digitsOnly(extracted.isbn),
-      genre: cleanStr(extracted.genre) || "book",
-      condition_assessment: cleanStr(extracted.condition_assessment) || "good",
-      issue_number: cleanStr(extracted.issue_number),
-      issue_date: cleanStr(extracted.issue_date),
-      series_title: cleanStr(extracted.series_title),
-      edition: cleanStr(extracted.edition),
-      confidence_score: Math.max(0.1, Math.min(1, Number(extracted.confidence_score ?? 0.7))),
-      ocr_quality: cleanStr(extracted.ocr_quality) || "unknown",
-      all_visible_text: cleanStr(extracted.all_visible_text) || "",
+      isbn: digitsOnly(extracted.isbn as string | undefined),
+      genre: cleanStr(extracted.genre as string | undefined) || "book",
+      condition_assessment:
+        cleanStr(extracted.condition_assessment as string | undefined) ||
+        "good",
+      issue_number: cleanStr(extracted.issue_number as string | undefined),
+      issue_date: cleanStr(extracted.issue_date as string | undefined),
+      series_title: cleanStr(extracted.series_title as string | undefined),
+      edition: cleanStr(extracted.edition as string | undefined),
+      confidence_score: Math.max(
+        0.1,
+        Math.min(1, Number(extracted.confidence_score ?? 0.7)),
+      ),
+      ocr_quality:
+        cleanStr(extracted.ocr_quality as string | undefined) || "unknown",
+      all_visible_text:
+        cleanStr(extracted.all_visible_text as string | undefined) || "",
       model_used: modelUsed,
     } as const;
 
@@ -415,7 +443,7 @@ serve(async (req) => {
     console.log(`OCR extraction successful for photo ${photoId}, model: ${modelUsed}`);
 
     // Check if auto-optimization is enabled in batch settings
-    const batchSettings = requestData?.batchSettings;
+    const batchSettings = requestData.batchSettings;
     const shouldAutoOptimize = batchSettings?.autoOptimize === true;
 
     // 1) Try to get user_id and item_id from photo
@@ -563,18 +591,19 @@ serve(async (req) => {
           console.log('Auto-optimization successful, updating inventory item');
           
           // Update inventory item with optimized data
-          const optimizeUpdatePayload: any = {
+          const optimizeUpdatePayload: Record<string, unknown> = {
             suggested_title: optimizeResult.optimizedListing.title,
             description: optimizeResult.optimizedListing.description,
           };
 
           if (optimizeResult.optimizedListing.price) {
-            optimizeUpdatePayload.suggested_price = optimizeResult.optimizedListing.price;
+            (optimizeUpdatePayload as { suggested_price?: number }).suggested_price =
+              optimizeResult.optimizedListing.price;
           }
 
           await supabase
             .from('inventory_items')
-            .update(optimizeUpdatePayload)  
+            .update(optimizeUpdatePayload)
             .eq('id', inventoryItem.id);
             
           console.log(`Auto-optimized item ${inventoryItem.id} with AI-generated content`);

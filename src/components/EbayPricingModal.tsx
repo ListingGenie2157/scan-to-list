@@ -58,13 +58,21 @@ export default function EbayPricingModal({ item, open, onClose, onApply }: Props
     }
     setLoading(true);
     try {
-      const payload: any = { condition, limit, includeShipping };
+      interface SearchPayload {
+        condition: string;
+        limit: number;
+        includeShipping: boolean;
+        isbn?: string;
+        query?: string;
+      }
+      const payload: SearchPayload = { condition, limit, includeShipping };
       if (item.isbn || item.issn) payload.isbn = query; else payload.query = query;
       const { data: res, error } = await supabase.functions.invoke("ebay-app-search", { body: payload });
       if (error) throw new Error(error.message);
       setData(res);
-    } catch (e: any) {
-      toast({ title: "Pricing failed", description: e.message ?? String(e), variant: "destructive" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast({ title: "Pricing failed", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }

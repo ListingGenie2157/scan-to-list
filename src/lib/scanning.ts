@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getActivePricing } from "@/lib/ebayCompat";
+import type { PostgrestError } from "@supabase/supabase-js";
 
 export type LookupMeta = {
   type: string | null;
@@ -23,10 +24,26 @@ export type LookupMeta = {
   issue_date?: string | null;
 } | null;
 
+interface ItemData {
+  title?: string | null;
+  issue_title?: string | null;
+  publisher?: string | null;
+  authors?: string[] | null;
+  year?: string | null;
+  description?: string | null;
+  categories?: string[] | null;
+  cover_url_ext?: string | null;
+  quantity?: number | null;
+  type?: string | null;
+  status?: string | null;
+  isbn13?: string | null;
+  [key: string]: unknown;
+}
+
 export function normalizeScan(raw: string): string | null {
   if (!raw) return null;
   // Remove non-digits (keep X for ISBN10 check but we'll convert to 13 anyway)
-  let s = String(raw).trim();
+  const s = String(raw).trim();
   let digits = s.replace(/[^0-9Xx]/g, "");
 
   // EAN-13 + EAN-5 addon (18 digits) -> for magazines (977 prefix), preserve add-on
@@ -83,7 +100,7 @@ export async function lookupIsbn(isbn13: string): Promise<LookupMeta> {
   });
   if (error) throw error;
   // Edge returns meta or null
-  return (data as any) ?? null;
+  return (data as LookupMeta | null) ?? null;
 }
 
 export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: 'book' | 'magazine'): Promise<number> {
@@ -116,7 +133,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
       .eq('user_id', user.id)
       .eq('isbn13', meta.isbn13!)
       .maybeSingle();
-    if (exErr && (exErr as any).code !== 'PGRST116') throw exErr;
+    if (exErr && (exErr as PostgrestError).code !== 'PGRST116') throw exErr;
     existing = existingData;
   } else if (isMagazineWithBarcode) {
     // For magazines, we'll use isbn13 field temporarily to store barcode
@@ -127,12 +144,12 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
       .eq('user_id', user.id)
       .eq('isbn13', meta.barcode!)
       .maybeSingle();
-    if (exErr && (exErr as any).code !== 'PGRST116') throw exErr;
+    if (exErr && (exErr as PostgrestError).code !== 'PGRST116') throw exErr;
     existing = existingData;
   }
 
   if (existing) {
-    const updateData: any = {
+    const updateData: ItemData = {
       quantity: (existing.quantity ?? 1) + 1,
       title: composedTitle ?? null,
       publisher: meta.publisher ?? null,
@@ -161,7 +178,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
     
     return existing.id as unknown as number;
   } else {
-    const insertData: any = {
+    const insertData: ItemData = {
       user_id: user.id,
       type: finalType,
       title: composedTitle ?? null,
@@ -201,7 +218,7 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
   }
 }
 
-async function syncToInventoryItems(itemId: number, itemData: any, userId: string) {
+async function syncToInventoryItems(itemId: number, itemData: ItemData, userId: string) {
   try {
     // Sync to inventory_items table for dual table management
     const inventoryData = {
@@ -242,7 +259,7 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
     let suggestedPrice: number | undefined;
     // First try eBay pricing if we have an ISBN or at least a title for the query.
     try {
-      const body: any = {};
+      const body: Record<string, string> = {};
       if (meta.isbn13 && meta.type !== 'magazine') body.isbn = meta.isbn13;
       // For magazines or items without ISBN, use title-based search
       if (!body.isbn && meta.title) body.query = meta.title;
@@ -250,7 +267,7 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
         try {
           const pricingData = await getActivePricing(body);
           // The eBay pricing function returns { suggestedPrice: number, analytics: ..., items: ..., confidence: ... }
-          const price = (pricingData as any)?.suggestedPrice as number | undefined;
+          const price = (pricingData as { suggestedPrice?: number })?.suggestedPrice;
           if (typeof price === 'number' && isFinite(price) && price > 0) {
             suggestedPrice = price;
           }
@@ -275,7 +292,7 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
         },
       });
       if (error) throw error;
-      const price = (data as any)?.price as number | undefined;
+      const price = (data as { price?: number })?.price;
       if (typeof price === 'number' && isFinite(price)) {
         suggestedPrice = price;
       }

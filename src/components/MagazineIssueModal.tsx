@@ -17,9 +17,9 @@ interface MagazineIssueModalProps {
 export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: MagazineIssueModalProps) {
   const [publicationName, setPublicationName] = useState(meta.title || '');
   const [issueTitle, setIssueTitle] = useState('');
-  const [issueNumber, setIssueNumber] = useState((meta as any).inferred_issue || '');
-  const [coverMonth, setCoverMonth] = useState((meta as any).inferred_month || '');
-  const [coverYear, setCoverYear] = useState((meta as any).inferred_year || new Date().getFullYear().toString());
+  const [issueNumber, setIssueNumber] = useState(meta.inferred_issue || '');
+  const [coverMonth, setCoverMonth] = useState(meta.inferred_month || '');
+  const [coverYear, setCoverYear] = useState(meta.inferred_year || new Date().getFullYear().toString());
   const [specialIssue, setSpecialIssue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -52,9 +52,9 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
         year: coverYear,
         type: 'magazine',
         // Keep the addon and barcode; preserve suggested price if provided from backend
-        suggested_price: (meta as any).suggested_price ?? null,
+        suggested_price: meta.suggested_price ?? null,
         // Explicit magazine fields for persistence
-        issue_number: issueNumber || (meta as any).inferred_issue || null,
+        issue_number: issueNumber || meta.inferred_issue || null,
         issue_date: dateBit || null,
       };
 
@@ -77,8 +77,8 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
         
         <div className="space-y-4">
           <div className="text-sm text-muted-foreground">
-            Barcode: {(meta as any).barcode}
-            {(meta as any).barcode_addon && ` (Add-on: ${(meta as any).barcode_addon})`}
+            Barcode: {meta.barcode}
+            {meta.barcode_addon && ` (Add-on: ${meta.barcode_addon})`}
           </div>
           
           <div className="space-y-2">

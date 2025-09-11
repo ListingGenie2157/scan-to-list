@@ -8,8 +8,12 @@ import { Card, CardContent } from "@/components/ui/card";
 
 type PricingStrategy = "ACTIVE_LISTINGS" | "COVER_MULTIPLIER" | "FLAT" | "MIN_OF";
 
+interface PricingItem {
+  title?: string;
+}
+
 interface BulkPricingOptionsProps {
-  items: any[];
+  items: PricingItem[];
   onPrices: (results: PriceResult[]) => void;
   loading?: boolean;
 }

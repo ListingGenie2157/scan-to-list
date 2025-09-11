@@ -13,7 +13,7 @@ interface DatabaseTypes {
           id: string;
           user_id: string;
           item_id: string;
-          listing_data: any;
+          listing_data: Record<string, unknown>;
           status: string;
           created_at: string;
           approved_at: string;
