@@ -76,12 +76,13 @@ serve(async (req) => {
     }
 
     const url = new URL(req.url);
-    if (url.pathname !== "/" && url.pathname !== "/start") {
-      return new Response(
-        JSON.stringify({ success: false, error: "Not Found" }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-      );
-    }
+    // Allow any path for OAuth start function
+    // if (url.pathname !== "/" && url.pathname !== "/start") {
+    //   return new Response(
+    //     JSON.stringify({ success: false, error: "Not Found" }),
+    //     { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    //   );
+    // }
 
     const envErr = envError();
     if (envErr) {

@@ -20,9 +20,22 @@ export function ConnectEbayButton() {
     if (loading) return; // why: avoid duplicate invocations on rapid taps/clicks
     try {
       setLoading(true);
+      
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Authentication required",
+          description: "Please sign in first to connect eBay.",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+      
       // Navigate directly to the edge function URL since it handles redirects
       const returnUrl = encodeURIComponent(window.location.href.split("#")[0]);
-      const oauthUrl = `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-start?r=${returnUrl}`;
+      const oauthUrl = `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-start?r=${returnUrl}&user=${encodeURIComponent(user.id)}`;
       // same tab to satisfy iOS gesture rules
       window.location.href = oauthUrl;
       return;
