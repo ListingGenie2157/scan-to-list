@@ -893,6 +893,13 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           item={pricingItem}
           open={isPricingModalOpen}
           onClose={() => setIsPricingModalOpen(false)}
+          onApply={(price: number) => {
+            // Update the item's suggested price
+            setInventory(items => items.map(it => 
+              it.id === pricingItem.id ? { ...it, suggested_price: price } : it
+            ));
+            setIsPricingModalOpen(false);
+          }}
         />
       )}
 
@@ -910,11 +917,13 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
           onOpenChange={(open) => !open && setEditModalItem(null)}
           item={editModalItem}
         onSave={(updated) => {
-          setInventory(items => items.map(it => it.id === updated.id ? {
-            ...it,
+          // Type-safe update ensuring proper types
+          const updatedItem: InventoryItem = {
+            ...editModalItem,
             ...updated,
-            photos: updated.photos || it.photos
-          } : it));
+            photos: updated.photos || editModalItem.photos
+          };
+          setInventory(items => items.map(it => it.id === updated.id ? updatedItem : it));
           setEditModalItem(null);
         }}
         />
