@@ -46,7 +46,12 @@ export const ListingApprovalsPage = () => {
         .limit(50);
 
       if (error) throw error;
-      setDrafts(data || []);
+      setDrafts((data || []).map(draft => ({
+        ...draft,
+        listing_data: typeof draft.listing_data === 'string' 
+          ? JSON.parse(draft.listing_data) 
+          : draft.listing_data
+      })));
     } catch (error) {
       console.error('Error loading listing drafts:', error);
       toast({

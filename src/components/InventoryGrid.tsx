@@ -219,12 +219,12 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
       if (error) {
         console.error('Error fetching inventory:', error);
       } else {
-        const mapped = (data || []).map((it: OldItemRow) => {
+        const mapped = (data || []).map((it: any) => {
           const firstPhoto = Array.isArray(it.photos) ? it.photos[0] : null;
           return {
             id: String(it.id),
             title: it.title ?? null,
-            author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,
+            author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : (typeof it.authors === 'string' ? it.authors : null),
             status: it.status ?? 'draft',
             suggested_category: it.type ?? 'book',
             suggested_price: it.suggested_price ?? null,
@@ -472,62 +472,68 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
     });
   }
 
+  const getPhotoUrl = (photos: PhotoInfo | PhotoInfo[] | null): string | null => {
+    if (!photos) return null;
+    if (Array.isArray(photos)) {
+      return photos[0]?.public_url || null;
+    }
+    return photos.public_url || null;
+  };
+
   const renderItemCard = (item: InventoryItem) => {
     const isSelected = selectedItems.includes(item.id);
     
     if (viewMode === "compact") {
       return (
-        <Card key={item.id} className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}>
-          <CardContent className="p-2">
+        <Card 
+          key={item.id} 
+          className={`relative cursor-pointer transition-all hover:shadow-md ${
+            isSelected ? 'ring-2 ring-primary' : ''
+          }`}
+          onClick={() => toggleItemSelection(item.id)}
+        >
+          <div className="absolute top-2 left-2 z-10">
+            <Checkbox
+              checked={isSelected}
+              onChange={() => toggleItemSelection(item.id)}
+              className="bg-background"
+            />
+          </div>
+          
+          <CardContent className="p-3">
             <div className="space-y-2">
-              {/* Selection Checkbox */}
-              <div className="flex justify-between items-start">
-                <Checkbox
-                  checked={isSelected}
-                  onCheckedChange={() => toggleItemSelection(item.id)}
-                  className="mt-1"
-                />
+              <div className="flex items-center gap-1">
+                {getCategoryIcon(item.suggested_category || 'book')}
+                {getTypeBadge(item.type)}
               </div>
               
               {/* Compact Image */}
               <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
-                {item.photos?.public_url ? (
+                {getPhotoUrl(item.photos) ? (
                   <img 
-                    src={item.photos.public_url} 
+                    src={getPhotoUrl(item.photos)!} 
                     alt={item.title || 'Item photo'}
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                  <BookOpen className="w-8 h-8 text-muted-foreground" />
                 )}
               </div>
               
-              {/* Compact Content */}
               <div className="space-y-1">
-                <h3 className="font-medium text-xs leading-tight line-clamp-2">
-                  {item.title || item.suggested_category || 'Untitled'}
-                </h3>
+                <p className="text-xs font-medium line-clamp-2 min-h-[2rem]">
+                  {item.title || item.suggested_title || 'Untitled'}
+                </p>
+                <p className="text-xs text-muted-foreground truncate">
+                  {item.author || 'Unknown Author'}
+                </p>
                 <div className="flex items-center justify-between">
-                  <div className="flex gap-1">
-                    <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
-                    {getTypeBadge(item.type)}
-                  </div>
-                  {getStatusIcon(item.status)}
+                  {getStatusBadge(item.status || 'draft')}
+                  <span className="text-xs font-semibold">
+                    ${item.suggested_price?.toFixed(2) || '0.00'}
+                  </span>
                 </div>
               </div>
-              
-              {/* Compact Actions */}
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-full text-xs"
-                onClick={() => {
-                  setSelectedItem(item);
-                  setIsCreateListingModalOpen(true);
-                }}
-              >
-                List on eBay
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -536,79 +542,62 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
     if (viewMode === "list") {
       return (
-        <Card key={item.id} className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}>
-          <CardContent className="p-3">
-            <div className="flex gap-3">
-              {/* Selection Checkbox */}
+        <Card 
+          key={item.id} 
+          className={`transition-all hover:shadow-md ${
+            isSelected ? 'ring-2 ring-primary' : ''
+          }`}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-4">
               <Checkbox
                 checked={isSelected}
                 onCheckedChange={() => toggleItemSelection(item.id)}
-                className="mt-1"
               />
               
               {/* List Image */}
               <div className="w-16 h-20 bg-muted rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                {item.photos?.public_url ? (
+                {getPhotoUrl(item.photos) ? (
                   <img 
-                    src={item.photos.public_url} 
+                    src={getPhotoUrl(item.photos)!} 
                     alt={item.title || 'Item photo'}
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <BookOpen className="w-4 h-4 text-muted-foreground" />
+                  <BookOpen className="w-6 h-6 text-muted-foreground" />
                 )}
               </div>
               
-              {/* List Content */}
-              <div className="flex-1 space-y-1">
-                <div className="flex items-start justify-between gap-2">
-                  <h3 className="font-medium text-sm leading-tight line-clamp-1">
-                    {item.title || item.suggested_category || 'Untitled Item'}
-                  </h3>
-                  <div className="flex items-center gap-1">
-                    {getStatusIcon(item.status)}
-                    {getStatusBadge(item.status)}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold truncate">
+                      {item.title || item.suggested_title || 'Untitled'}
+                    </h3>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {item.author || 'Unknown Author'}
+                    </p>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {item.publisher || ''}
+                    </p>
+                  </div>
+                  
+                  <div className="flex items-center space-x-2 ml-4">
+                    <div className="text-right">
+                      <div className="font-semibold">
+                        ${item.suggested_price?.toFixed(2) || '0.00'}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {new Date(item.created_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-col items-end space-y-1">
+                      {getStatusBadge(item.status || 'draft')}
+                      {getTypeBadge(item.type)}
+                    </div>
                   </div>
                 </div>
-                
-                <p className="text-xs text-muted-foreground">
-                  {item.author || 'Unknown Author'}
-                </p>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex gap-2 items-center">
-                    <span className="font-semibold text-sm">Qty: {item.quantity ?? 1}</span>
-                    {getTypeBadge(item.type)}
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {item.last_scanned_at ? `Scanned ${new Date(item.last_scanned_at).toLocaleDateString()}` : ''}
-                  </span>
-                </div>
-              </div>
-              
-              {/* List Actions */}
-              <div className="flex flex-col gap-1">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="text-xs"
-                  onClick={() => {
-                    // TODO: Implement edit functionality
-                  }}
-                >
-                  Edit
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="text-xs"
-                  onClick={() => {
-                    setSelectedItem(item);
-                    setIsCreateListingModalOpen(true);
-                  }}
-                >
-                  List on eBay
-                </Button>
               </div>
             </div>
           </CardContent>
@@ -620,118 +609,96 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
     return (
       <Card 
         key={item.id} 
-        className={`shadow-card hover:shadow-elevated transition-shadow cursor-pointer ${isSelected ? 'ring-2 ring-primary' : ''}`}
-        onClick={() => {
-          setSelectedItem(item);
-          setIsCreateListingModalOpen(true);
-        }}
+        className={`relative cursor-pointer transition-all hover:shadow-md ${
+          isSelected ? 'ring-2 ring-primary' : ''
+        }`}
+        onClick={() => toggleItemSelection(item.id)}
       >
+        <div className="absolute top-2 left-2 z-10">
+          <Checkbox
+            checked={isSelected}
+            onChange={() => toggleItemSelection(item.id)}
+            className="bg-background"
+          />
+        </div>
+        
         <CardContent className="p-4">
           <div className="space-y-3">
-            {/* Selection Checkbox */}
-            <div className="flex justify-between items-start">
-              <Checkbox
-                checked={isSelected}
-                onCheckedChange={() => toggleItemSelection(item.id)}
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-            
-            {/* Image */}
+            {/* Grid Image */}
             <div className="aspect-[3/4] bg-muted rounded-lg flex items-center justify-center overflow-hidden">
-              {item.photos?.public_url ? (
+              {getPhotoUrl(item.photos) ? (
                 <img 
-                  src={item.photos.public_url} 
+                  src={getPhotoUrl(item.photos)!} 
                   alt={item.title || 'Item photo'}
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <BookOpen className="w-6 h-6 text-muted-foreground" />
+                <BookOpen className="w-12 h-12 text-muted-foreground" />
               )}
             </div>
-
-            {/* Content */}
+            
             <div className="space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <h3 className="font-medium text-sm leading-tight line-clamp-2">
-                  {item.title || item.suggested_category || 'Untitled Item'}
-                </h3>
+              <div className="flex items-center gap-1">
                 {getCategoryIcon(item.suggested_category || 'book')}
+                {getTypeBadge(item.type)}
               </div>
               
-              <p className="text-sm text-muted-foreground line-clamp-1">
-                {item.suggested_category === 'magazine' ? (
-                  <>
-                    {item.series_title && `${item.series_title} `}
-                    {item.issue_number && `Issue #${item.issue_number}`}
-                    {item.issue_date && ` (${item.issue_date})`}
-                  </>
-                ) : (
-                  item.author || 'Unknown Author'
-                )}
+              <h3 className="font-semibold text-sm line-clamp-2 min-h-[2.5rem]">
+                {item.title || item.suggested_title || 'Untitled'}
+              </h3>
+              
+              <p className="text-sm text-muted-foreground truncate">
+                {item.author || 'Unknown Author'}
               </p>
               
               <div className="flex items-center justify-between">
-                 <div className="flex items-center gap-1">
-                   <Badge variant="outline">Qty: {item.quantity ?? 1}</Badge>
-                   {getTypeBadge(item.type)}
-                    {item.amazon_asin && (
-                    <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 text-xs">
-                      ASIN
-                    </Badge>
-                   )}
-                 </div>
-                <div className="flex items-center gap-1">
-                  {getStatusIcon(item.status)}
-                  {getStatusBadge(item.status)}
-                </div>
+                {getStatusBadge(item.status || 'draft')}
+                <span className="font-semibold">
+                  ${item.suggested_price?.toFixed(2) || '0.00'}
+                </span>
               </div>
-
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>Added {new Date(item.created_at).toLocaleDateString()}</span>
-                <span>{item.last_scanned_at ? `Scanned ${new Date(item.last_scanned_at).toLocaleDateString()}` : ''}</span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="space-y-2 pt-2">
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1 min-w-0"
-                  onClick={(e) => { 
-                    e.stopPropagation(); 
-                    setEditModalItem(item);
-                  }}
-                >
-                  <Settings className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Edit
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  className="flex-1 min-w-0"
+              
+              <div className="flex flex-wrap gap-1 pt-2">
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleAsinMatch(item);
+                    setSelectedItem(item);
+                    setIsCreateListingModalOpen(true);
                   }}
-                  title="Link this item to its Amazon product page (optional)"
+                  className="text-xs px-2 py-1 h-6"
                 >
-                  <ExternalLink className="w-3 h-3 sm:w-4 sm:h-4 mr-1" /> Amazon
+                  <Package className="w-3 h-3 mr-1" />
+                  List
+                </Button>
+                
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleGetPricing(item);
+                  }}
+                  className="text-xs px-2 py-1 h-6"
+                >
+                  <DollarSign className="w-3 h-3 mr-1" />
+                  Price
+                </Button>
+                
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setEditModalItem(item);
+                  }}
+                  className="text-xs px-2 py-1 h-6"
+                >
+                  <Edit className="w-3 h-3 mr-1" />
+                  Edit
                 </Button>
               </div>
-               <Button 
-                 variant="outline" 
-                 size="sm" 
-                 className="w-full"
-                 onClick={(e) => {
-                   e.stopPropagation();
-                   setSelectedItem(item);
-                   setIsCreateListingModalOpen(true);
-                 }}
-               >
-                <Package className="w-4 h-4 mr-1" /> List on eBay
-               </Button>
             </div>
           </div>
         </CardContent>
@@ -741,268 +708,217 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
 
   return (
     <div className="space-y-6">
-      {/* Filters */}
-      <Card className="shadow-card">
-        <CardContent className="p-4">
-          <div className="flex flex-col gap-4">
-            {/* Search and Filters Row */}
-            <div className="flex flex-col sm:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by title or author..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <Filter className="w-4 h-4 mr-2" />
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Statuses</SelectItem>
-                  <SelectItem value="photographed">Photographed</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="processed">Processed</SelectItem>
-                  <SelectItem value="listed">Listed</SelectItem>
-                  <SelectItem value="sold">Sold</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="book">Books</SelectItem>
-                  <SelectItem value="magazine">Magazines</SelectItem>
-                </SelectContent>
-              </Select>
-
-              <Select value={typeFilter} onValueChange={setTypeFilter}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Items</SelectItem>
-                  <SelectItem value="book">Books Only</SelectItem>
-                  <SelectItem value="magazine">Magazines Only</SelectItem>
-                  <SelectItem value="bundle">Bundles</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {/* View Mode Toggle Row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <Checkbox
-                  checked={selectedItems.length === filteredInventory.length && filteredInventory.length > 0}
-                  onCheckedChange={toggleSelectAll}
-                />
-                <p className="text-sm text-muted-foreground">
-                  {selectedItems.length > 0 ? (
-                    <>Selected {selectedItems.length} of {filteredInventory.length} items</>
-                  ) : (
-                    <>Showing {filteredInventory.length} of {inventory.length} items</>
-                  )}
-                </p>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground">View:</span>
-                <div className="flex rounded-lg border p-1">
-                  <Button
-                    variant={viewMode === "grid" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("grid")}
-                    className="h-8 px-3"
-                  >
-                    <LayoutGrid className="w-4 h-4" />
-                    <span className="hidden sm:inline ml-1">Grid</span>
-                  </Button>
-                  <Button
-                    variant={viewMode === "compact" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("compact")}
-                    className="h-8 px-3"
-                  >
-                    <Grid3X3 className="w-4 h-4" />
-                    <span className="hidden sm:inline ml-1">Compact</span>
-                  </Button>
-                  <Button
-                    variant={viewMode === "list" ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setViewMode("list")}
-                    className="h-8 px-3"
-                  >
-                    <List className="w-4 h-4" />
-                    <span className="hidden sm:inline ml-1">List</span>
-                  </Button>
-                </div>
-              </div>
-            </div>
+      {/* Controls */}
+      <div className="flex flex-col gap-4">
+        {/* Search and Filters */}
+        <div className="flex flex-col sm:flex-row gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search items..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
           </div>
-        </CardContent>
-      </Card>
+          
+          <div className="flex gap-2">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="processed">Processed</SelectItem>
+                <SelectItem value="listed">Listed</SelectItem>
+                <SelectItem value="sold">Sold</SelectItem>
+              </SelectContent>
+            </Select>
+            
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                <SelectItem value="book">Books</SelectItem>
+                <SelectItem value="magazine">Magazines</SelectItem>
+              </SelectContent>
+            </Select>
 
-      {/* Action Buttons */}
-      <div className="flex flex-wrap gap-2">
-        {selectedItems.length > 0 && (
-          <>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={handleExportCSV}
-              disabled={isExporting}
-              className="w-full sm:w-auto"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              {isExporting ? 'Exporting...' : `Export CSV (${selectedItems.length})`}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setIsBulkListingModalOpen(true)}
-              className="w-full sm:w-auto"
-            >
-              Bulk Create Listings ({selectedItems.length})
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              onClick={() => setIsBulkEditModalOpen(true)}
-              className="w-full sm:w-auto"
-            >
-              <Edit3 className="w-4 h-4 mr-2" />
-              Bulk Edit ({selectedItems.length})
-            </Button>
-            <Button 
-              variant="destructive" 
-              size="sm"
-              onClick={deleteSelected}
-              className="w-full sm:w-auto"
-            >
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete ({selectedItems.length})
-            </Button>
-          </>
-        )}
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="book">Book</SelectItem>
+                <SelectItem value="magazine">Magazine</SelectItem>
+                <SelectItem value="bundle">Bundle</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {/* View Controls and Actions */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              {filteredInventory.length} items
+              {selectedItems.length > 0 && ` (${selectedItems.length} selected)`}
+            </span>
+            
+            {selectedItems.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={toggleSelectAll}>
+                  {selectedItems.length === filteredInventory.length ? 'Deselect All' : 'Select All'}
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {/* View Mode Toggle */}
+            <div className="flex border rounded-lg p-1">
+              <Button
+                size="sm"
+                variant={viewMode === "compact" ? "default" : "ghost"}
+                onClick={() => setViewMode("compact")}
+                className="px-2"
+              >
+                <Grid3X3 className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "grid" ? "default" : "ghost"}
+                onClick={() => setViewMode("grid")}
+                className="px-2"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "list" ? "default" : "ghost"}
+                onClick={() => setViewMode("list")}
+                className="px-2"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Action Buttons */}
+            {selectedItems.length > 0 && (
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsBulkListingModalOpen(true)}
+                >
+                  <Package className="w-4 h-4 mr-1" />
+                  Bulk List ({selectedItems.length})
+                </Button>
+                
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsBulkEditModalOpen(true)}
+                >
+                  <Edit3 className="w-4 h-4 mr-1" />
+                  Bulk Edit
+                </Button>
+                
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleExportCSV}
+                  disabled={isExporting}
+                >
+                  <Download className="w-4 h-4 mr-1" />
+                  Export CSV
+                </Button>
+                
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={deleteSelected}
+                  className="text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Delete
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
+
       {/* Inventory Grid */}
       {loading ? (
-        <div className={getGridColumns()}>
-          {[...Array(viewMode === "compact" ? 12 : 6)].map((_, i) => (
-            <Card key={i} className="shadow-card">
-              <CardContent className={viewMode === "compact" ? "p-2" : "p-4"}>
-                <div className="space-y-3 animate-pulse">
-                  <div className={
-                    viewMode === "compact" 
-                      ? "aspect-[3/4] bg-muted rounded-lg" 
-                      : viewMode === "list"
-                      ? "w-16 h-20 bg-muted rounded-lg"
-                      : "aspect-[3/4] bg-muted rounded-lg"
-                  } />
-                  <div className="space-y-2">
-                    <div className="h-4 bg-muted rounded w-3/4" />
-                    <div className="h-3 bg-muted rounded w-1/2" />
-                    <div className="h-4 bg-muted rounded w-1/3" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="text-center py-8">Loading inventory...</div>
+      ) : filteredInventory.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-muted-foreground">No items found.</p>
         </div>
       ) : (
         <div className={getGridColumns()}>
-          {filteredInventory.map((item) => renderItemCard(item))}
+          {filteredInventory.map(renderItemCard)}
         </div>
       )}
 
-      {filteredInventory.length === 0 && !loading && (
-        <Card className="shadow-card">
-          <CardContent className="p-8 text-center">
-            <Package className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="font-medium mb-2">No items found</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Try adjusting your search criteria or upload some photos to get started.
-            </p>
-            <Button variant="gradient">
-              Upload Photos
-            </Button>
-          </CardContent>
-        </Card>
+      {/* Modals */}
+      {selectedItem && (
+        <CreateListingModal
+          item={selectedItem}
+          open={isCreateListingModalOpen}
+          onOpenChange={setIsCreateListingModalOpen}
+        />
       )}
 
-      <CreateListingModal 
-        item={selectedItem}
-        isOpen={isCreateListingModalOpen}
-        onClose={() => {
-          setIsCreateListingModalOpen(false);
-          setSelectedItem(null);
-        }}
-      />
-
       <BulkListingModal
+        selectedItems={selectedItems}
         isOpen={isBulkListingModalOpen}
         onClose={() => setIsBulkListingModalOpen(false)}
-        selectedItems={selectedItems.length > 0 ? selectedItems : filteredInventory.map(item => item.id)}
       />
-      
+
       <BulkEditModal
+        selectedItems={selectedItems}
         isOpen={isBulkEditModalOpen}
         onClose={() => setIsBulkEditModalOpen(false)}
-        selectedItems={selectedItems}
-        onBulkUpdateComplete={() => {
-          fetchInventory();
-          setSelectedItems([]);
-        }}
+        onBulkUpdateComplete={fetchInventory}
       />
 
-      <EbayPricingModal
-        open={isPricingModalOpen}
-        onClose={() => {
-          setIsPricingModalOpen(false);
-          setPricingItem(null);
-        }}
-        item={pricingItem || { title: "" }}
-        onApply={(price) => {
-          // TODO: Apply price to item
-          console.log("Apply price:", price);
-          setIsPricingModalOpen(false);
-          setPricingItem(null);
-        }}
-      />
+      {pricingItem && (
+        <EbayPricingModal
+          item={pricingItem}
+          open={isPricingModalOpen}
+          onClose={() => setIsPricingModalOpen(false)}
+        />
+      )}
 
-      <AsinMatchModal 
-        item={asinMatchItem}
-        isOpen={isAsinMatchModalOpen}
-        onClose={() => {
-          setIsAsinMatchModalOpen(false);
-          setAsinMatchItem(null);
-        }}
-        onSuccess={() => {
-          fetchInventory(); // Refresh to show ASIN badge
-        }}
-      />
+      {asinMatchItem && (
+        <AsinMatchModal
+          item={asinMatchItem}
+          isOpen={isAsinMatchModalOpen}
+          onClose={() => setIsAsinMatchModalOpen(false)}
+        />
+      )}
 
-      <ItemEditModal 
-        open={editModalItem !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditModalItem(null);
-          }
-        }}
-        item={editModalItem}
-        onSave={(updatedItem) => {
+      {editModalItem && (
+        <ItemEditModal
+          open={!!editModalItem}
+          onOpenChange={(open) => !open && setEditModalItem(null)}
+          item={editModalItem}
+        onSave={(updated) => {
+          setInventory(items => items.map(it => it.id === updated.id ? {
+            ...it,
+            ...updated,
+            photos: updated.photos || it.photos
+          } : it));
           setEditModalItem(null);
-          fetchInventory();
         }}
-      />
+        />
+      )}
     </div>
   );
 });
-InventoryGrid.displayName = "InventoryGrid";

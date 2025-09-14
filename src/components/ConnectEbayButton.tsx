@@ -20,20 +20,11 @@ export function ConnectEbayButton() {
     if (loading) return; // why: avoid duplicate invocations on rapid taps/clicks
     try {
       setLoading(true);
-      const { data, error } = await supabase.functions.invoke<EbayOAuthStartResponse>(
-        "ebay-oauth-start",
-        {
-          body: {
-            // why: strip hash to avoid polluting OAuth return URL
-            returnUrl: window.location.href.split("#")[0],
-          },
-        }
-      );
-      if (error || !data?.authorizeUrl) {
-        throw new Error(error?.message || "No authorization URL");
-      }
+      // Navigate directly to the edge function URL since it handles redirects
+      const returnUrl = encodeURIComponent(window.location.href.split("#")[0]);
+      const oauthUrl = `https://yfynlpwzrxoxcwntigjv.supabase.co/functions/v1/ebay-oauth-start?r=${returnUrl}`;
       // same tab to satisfy iOS gesture rules
-      window.location.href = data.authorizeUrl;
+      window.location.href = oauthUrl;
       return;
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : String(e);

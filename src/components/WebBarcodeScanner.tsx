@@ -24,7 +24,7 @@ export default function WebBarcodeScanner({ onCode, onClose, continuous = false,
       video: {
         facingMode: { ideal: "environment" },
         // Focus mode is not universally supported; browsers will ignore if unsupported
-        advanced: [{ focusMode: "continuous" }],
+        advanced: [{ focusMode: "continuous" } as any],
       } as MediaTrackConstraints,
     };
 

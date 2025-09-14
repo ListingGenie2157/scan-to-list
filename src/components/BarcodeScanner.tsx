@@ -6,7 +6,7 @@ import { Camera } from 'lucide-react';
 import WebBarcodeScanner from '@/components/WebBarcodeScanner';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { normalizeScan, lookupIsbn, upsertItem, storeCover } from '@/lib/scanning';
+import { normalizeScan, lookupIsbn, upsertItem, storeCover, type LookupMeta } from '@/lib/scanning';
 import { useScannerSettings } from '@/hooks/useScannerSettings';
 import { useItemTypeSetting } from '@/hooks/useItemTypeSetting';
 import { MagazineIssueModal } from '@/components/MagazineIssueModal';
@@ -32,7 +32,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   const [batchMode, setBatchMode] = useState(false);
   const [lastScans, setLastScans] = useState<string[]>([]);
   const [showMagazineModal, setShowMagazineModal] = useState(false);
-  const [pendingMagazineMeta, setPendingMagazineMeta] = useState<ScanMeta | null>(null);
+  const [pendingMagazineMeta, setPendingMagazineMeta] = useState<LookupMeta | null>(null);
 
   const recentSet = useRef<Map<string, number>>(new Map<string, number>());
   const { toast } = useToast();
@@ -102,7 +102,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   }, []);
 
   const resolveTypes = useCallback(
-    (meta: ScanMeta): { finalItemType: ItemType; upsertItemType: Exclude<ItemType, 'bundle'> } => {
+    (meta: LookupMeta): { finalItemType: ItemType; upsertItemType: Exclude<ItemType, 'bundle'> } => {
       // If UI is "bundle", persist as "book" but store cover under "bundle".
       // This mirrors existing behavior. Adjust if you add real bundle records.
       const finalItemType: ItemType =
@@ -121,10 +121,10 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   );
 
   const completeSave = useCallback(
-    async (meta: ScanMeta) => {
+    async (meta: LookupMeta) => {
       try {
         const { finalItemType, upsertItemType } = resolveTypes(meta);
-        const itemId = await upsertItem(meta, upsertItemType);
+        const itemId = await upsertItem(meta as NonNullable<LookupMeta>, upsertItemType);
 
         if (mirrorCovers && meta.coverUrl) {
           try {
@@ -137,7 +137,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
         const displayCode = meta.barcode || meta.isbn13 || 'Unknown';
         if (isMounted.current) {
           toast({ title: 'Saved', description: `Saved ${displayCode} – ${meta.title || 'Untitled'}` });
-          onScanSuccess?.(meta);
+          onScanSuccess?.(meta as ScanMeta);
         }
       } catch (error: unknown) {
         console.error('Save error:', error);
@@ -164,7 +164,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
           return;
         }
 
-        const meta = (await lookupIsbn(normalized)) as ScanMeta | null;
+        const meta = await lookupIsbn(normalized);
         if (!meta) {
           if (isMounted.current) {
             toast({ title: 'Not found', description: 'No details found for this code.', variant: 'destructive' });

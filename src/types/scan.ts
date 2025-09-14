@@ -8,5 +8,14 @@ export interface ScanMeta {
   barcode_addon?: string | null;
   isbn13?: string | null;
   coverUrl?: string | null;
-  // add other fields as needed by upsertItem
+  authors?: string[] | null;
+  publisher?: string | null;
+  year?: string | null;
+  description?: string | null;
+  categories?: string[] | null;
+  genre?: string | null;
+  condition?: string | null;
+  series_title?: string | null;
+  issue_number?: string | null;
+  issue_date?: string | null;
 }

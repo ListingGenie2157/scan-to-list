@@ -80,7 +80,7 @@ export function BulkListingModal({ selectedItems, isOpen, onClose }: BulkListing
           .in('id', selectedItems.map((id) => Number(id)));
 
         if (error) throw error;
-        const mapped: InventoryItem[] = (data as RawItem[] || []).map((it) => ({
+        const mapped: InventoryItem[] = (data as unknown as RawItem[] || []).map((it) => ({
           id: String(it.id),
           title: it.title ?? null,
           author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,

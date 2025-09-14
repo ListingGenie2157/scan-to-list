@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/components/ui/use-toast';
 import { Camera, X } from 'lucide-react';
 import WebBarcodeScanner from '@/components/WebBarcodeScanner';
-import { normalizeScan, lookupIsbn, upsertItem, storeCover } from '@/lib/scanning';
+import { normalizeScan, lookupIsbn, upsertItem, storeCover, type LookupMeta } from '@/lib/scanning';
 import { useScannerSettings } from '@/hooks/useScannerSettings';
 import { useItemTypeSetting } from '@/hooks/useItemTypeSetting';
 import { ScanMeta } from '@/types/scan';
@@ -36,7 +36,7 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
         interface WindowWithWebkitAudio extends Window {
           webkitAudioContext: typeof AudioContext;
         }
-        const AudioCtx = window.AudioContext || (window as WindowWithWebkitAudio).webkitAudioContext;
+        const AudioCtx = window.AudioContext || (window as unknown as WindowWithWebkitAudio).webkitAudioContext;
         const ctx = new AudioCtx();
         const o = ctx.createOscillator();
         const g = ctx.createGain();
@@ -88,7 +88,7 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
         return;
       }
 
-        const meta = await lookupIsbn(codeToUse) as ScanMeta | null;
+        const meta = await lookupIsbn(codeToUse);
       if (!meta) {
         toast({ 
           title: 'Not found', 
@@ -101,7 +101,7 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
       const finalItemType: 'book' | 'magazine' | 'bundle' = itemType === 'bundle' ? 'bundle' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
       const upsertItemType: 'book' | 'magazine' = itemType === 'bundle' ? 'book' : (itemType || ((meta.type === 'magazine' || meta.type === 'product') ? 'magazine' : 'book'));
 
-      const itemId = await upsertItem(meta, upsertItemType);
+      const itemId = await upsertItem(meta as NonNullable<LookupMeta>, upsertItemType);
       
       if (mirrorCovers && meta.coverUrl) {
         try {
@@ -118,7 +118,7 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
         description: `${displayCode} – ${meta.title || 'Untitled'}` 
       });
       
-      onSuccess?.(meta);
+      onSuccess?.(meta as ScanMeta);
       } catch (error: unknown) {
         console.error('Batch scan error:', error);
       toast({ 

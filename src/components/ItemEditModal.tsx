@@ -104,8 +104,7 @@ export function ItemEditModal({ open, onOpenChange, item, onSave }: ItemEditModa
       const { data: photoData, error: photoError } = await supabase
         .from('photos')
         .insert({
-          user_id: item.user_id,
-          item_id: item.id,
+          user_id: item.user_id!,
           file_name: fileName,
           storage_path: filePath,
           public_url: publicUrl,
@@ -169,7 +168,11 @@ export function ItemEditModal({ open, onOpenChange, item, onSave }: ItemEditModa
         description: "Your changes have been saved.",
       });
 
-      onSave({ ...item, ...formData });
+      onSave({ 
+        ...item, 
+        ...formData,
+        suggested_price: formData.suggested_price ? parseFloat(formData.suggested_price) : null
+      });
       onOpenChange(false);
     } catch (error) {
       console.error('Save error:', error);
@@ -203,8 +206,7 @@ export function ItemEditModal({ open, onOpenChange, item, onSave }: ItemEditModa
       const { data: photoData, error: photoError } = await supabase
         .from('photos')
         .insert({
-          user_id: item.user_id,
-          item_id: item.id,
+          user_id: item.user_id!,
           file_name: fileName,
           storage_path: filePath,
           public_url: publicUrl,
