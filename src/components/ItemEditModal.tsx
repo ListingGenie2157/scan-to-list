@@ -12,16 +12,45 @@ import { Upload, Camera, Sparkles, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PhotoOptimizer } from "./PhotoOptimizer";
+import type { InventoryItem } from "@/types/inventory";
 
 interface ItemEditModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  item: any;
-  onSave: (updatedItem: any) => void;
+  item: InventoryItem | null;
+  onSave: (updatedItem: InventoryItem) => void;
+}
+
+interface FormData {
+  title: string;
+  author: string;
+  publisher: string;
+  isbn: string;
+  series_title: string;
+  issue_number: string;
+  issue_date: string;
+  suggested_price: string;
+  condition_assessment: string;
+  genre: string;
+  description: string;
+  suggested_category: string;
 }
 
 export function ItemEditModal({ open, onOpenChange, item, onSave }: ItemEditModalProps) {
-  const [formData, setFormData] = useState<any>({});
+  const [formData, setFormData] = useState<FormData>({
+    title: '',
+    author: '',
+    publisher: '',
+    isbn: '',
+    series_title: '',
+    issue_number: '',
+    issue_date: '',
+    suggested_price: '',
+    condition_assessment: 'good',
+    genre: '',
+    description: '',
+    suggested_category: 'book'
+  });
   const [showPhotoOptimizer, setShowPhotoOptimizer] = useState(false);
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
@@ -36,7 +65,7 @@ export function ItemEditModal({ open, onOpenChange, item, onSave }: ItemEditModa
         series_title: item.series_title || '',
         issue_number: item.issue_number || '',
         issue_date: item.issue_date || '',
-        suggested_price: item.suggested_price || '',
+        suggested_price: item.suggested_price ? String(item.suggested_price) : '',
         condition_assessment: item.condition_assessment || 'good',
         genre: item.genre || '',
         description: item.description || '',
@@ -48,8 +77,8 @@ export function ItemEditModal({ open, onOpenChange, item, onSave }: ItemEditModa
   const isBook = formData.suggested_category === 'book';
   const isMagazine = formData.suggested_category === 'magazine';
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev: any) => ({ ...prev, [field]: value }));
+  const handleInputChange = (field: keyof FormData, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -75,8 +104,7 @@ export function ItemEditModal({ open, onOpenChange, item, onSave }: ItemEditModa
       const { data: photoData, error: photoError } = await supabase
         .from('photos')
         .insert({
-          user_id: item.user_id,
-          item_id: item.id,
+          user_id: item.user_id!,
           file_name: fileName,
           storage_path: filePath,
           public_url: publicUrl,
@@ -140,7 +168,11 @@ export function ItemEditModal({ open, onOpenChange, item, onSave }: ItemEditModa
         description: "Your changes have been saved.",
       });
 
-      onSave({ ...item, ...formData });
+      onSave({ 
+        ...item, 
+        ...formData,
+        suggested_price: formData.suggested_price ? parseFloat(formData.suggested_price) : null
+      });
       onOpenChange(false);
     } catch (error) {
       console.error('Save error:', error);
@@ -174,8 +206,7 @@ export function ItemEditModal({ open, onOpenChange, item, onSave }: ItemEditModa
       const { data: photoData, error: photoError } = await supabase
         .from('photos')
         .insert({
-          user_id: item.user_id,
-          item_id: item.id,
+          user_id: item.user_id!,
           file_name: fileName,
           storage_path: filePath,
           public_url: publicUrl,

@@ -169,7 +169,16 @@ Format your response as JSON with "title" and "description" fields. Do not inclu
 });
 
 // Function to get market-based pricing using the ebay-app-search edge function
-async function getMarketBasedPricing(itemData: any): Promise<number | null> {
+interface ItemInfo {
+  title?: string;
+  author?: string;
+  isbn?: string;
+  condition?: string;
+  category?: string;
+  publication_year?: number;
+}
+
+async function getMarketBasedPricing(itemData: ItemInfo): Promise<number | null> {
   const { title, author, isbn } = itemData;
   
   try {
@@ -219,7 +228,7 @@ async function getMarketBasedPricing(itemData: any): Promise<number | null> {
 }
 
 // Fallback pricing function
-function calculateFallbackPrice(itemData: any): number {
+function calculateFallbackPrice(itemData: ItemInfo): number {
   const { condition, category, publication_year } = itemData;
   const isMagazine = category?.toLowerCase().includes('magazine');
   

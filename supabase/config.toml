@@ -57,7 +57,7 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.ebay-oauth-start]
-verify_jwt = true
+verify_jwt = false
 
 [functions.ebay-oauth-callback]
 verify_jwt = false

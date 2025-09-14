@@ -63,8 +63,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: itemsErr.message }), { status: 500, headers: corsHeaders });
     }
 
-    const ownedItemIds = (items || []).map((it: any) => it.id);
-    const photoIds = (items || []).map((it: any) => it.photo_id).filter((id: string | null) => !!id);
+    const typedItems = (items ?? []) as Array<{ id: string; photo_id: string | null; user_id: string }>;
+    const ownedItemIds = typedItems.map((it) => it.id);
+    const photoIds = typedItems.map((it) => it.photo_id).filter((id): id is string => !!id);
 
     // Fetch photos owned by the user to get storage paths
     const { data: photos, error: photosErr } = await supabaseAdmin
@@ -77,8 +78,9 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: photosErr.message }), { status: 500, headers: corsHeaders });
     }
 
-    const keys = (photos || [])
-      .map((r: any) => (r.storage_path ? r.storage_path : keyFromPublicUrl(r.public_url || "")))
+    const typedPhotos = (photos ?? []) as Array<{ id: string; public_url: string | null; storage_path: string | null; user_id: string }>;
+    const keys = typedPhotos
+      .map((r) => (r.storage_path ? r.storage_path : keyFromPublicUrl(r.public_url || "")))
       .filter((k: string | null): k is string => !!k);
 
     // delete storage files first (ignore missing)
@@ -99,9 +101,10 @@ serve(async (req) => {
       JSON.stringify({ ok: true, deleted: { items: ownedItemIds.length, photos: photoIds.length, files: keys.length } }),
       { headers: { ...corsHeaders, "content-type": "application/json" } }
     );
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("delete-items error", e);
-    return new Response(JSON.stringify({ error: e?.message || "unknown" }), { status: 500, headers: corsHeaders });
+    const message = e instanceof Error ? e.message : "unknown";
+    return new Response(JSON.stringify({ error: message }), { status: 500, headers: corsHeaders });
   }
 });
 

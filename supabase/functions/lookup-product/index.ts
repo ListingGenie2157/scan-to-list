@@ -150,8 +150,8 @@ function isbn10to13(isbn10: string): string {
 // - EAN-2: often encodes issue number or week number (00-99). We'll expose as inferred_issue.
 // - EAN-5: often encodes price (xxxxy => xxxx currency/price + checksum). We'll parse to a numeric price in USD if plausible.
 function parseMagazineAddon(addon: string): { inferred_month?: string | null; inferred_year?: string | null; inferred_issue?: string | null; suggested_price?: number | null } {
-  let inferred_month: string | null = null;
-  let inferred_year: string | null = null;
+  const inferred_month: string | null = null;
+  const inferred_year: string | null = null;
   let inferred_issue: string | null = null;
   let suggested_price: number | null = null;
 
@@ -219,11 +219,11 @@ async function lookupOpenLibrary(isbn: string) {
       return {
         type: 'book',
         title: book.title ?? null,
-        authors: book.authors ? book.authors.map((a: any) => a.name) : null,
+        authors: book.authors ? book.authors.map((a: { name: string }) => a.name) : null,
         publisher: book.publishers ? book.publishers[0]?.name ?? null : null,
         publication_year: yearMatch ? yearMatch[0] : null,
         description: book.description ?? null,
-        categories: book.subjects ? book.subjects.map((s: any) => s.name) : null,
+        categories: book.subjects ? book.subjects.map((s: { name: string }) => s.name) : null,
         coverUrl: (book.cover && (book.cover.medium || book.cover.large)) || `https://covers.openlibrary.org/b/isbn/${isbn}-M.jpg`,
       };
     }

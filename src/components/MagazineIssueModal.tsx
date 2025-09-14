@@ -56,11 +56,14 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
         type: 'magazine',
         // Keep the addon and barcode; preserve suggested price if provided from backend
         suggested_price: meta.suggested_price ?? null,
+
         // Explicit magazine fields for persistence
         issue_number: issueNumber || meta.inferred_issue || null,
         suggested_price: (meta as any).suggested_price ?? null,
         // Explicit magazine fields for persistence
         issue_number: issueNumber || (meta as any).inferred_issue || null,main
+        // Explicit magazine fields for persistence
+        issue_number: issueNumber || meta.inferred_issue || null,>>>>>>> main
         issue_date: dateBit || null,
       };
 
@@ -83,8 +86,8 @@ export function MagazineIssueModal({ open, onOpenChange, meta, onConfirm }: Maga
         
         <div className="space-y-4">
           <div className="text-sm text-muted-foreground">
-            Barcode: {(meta as any).barcode}
-            {(meta as any).barcode_addon && ` (Add-on: ${(meta as any).barcode_addon})`}
+            Barcode: {meta.barcode}
+            {meta.barcode_addon && ` (Add-on: ${meta.barcode_addon})`}
           </div>
           
           <div className="space-y-2">

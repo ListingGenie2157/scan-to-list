@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,13 +44,7 @@ export const TitlePreferencesModal = ({ isOpen, onClose }: TitlePreferencesModal
   const [newSuffix, setNewSuffix] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (isOpen && user) {
-      fetchUserPreferences();
-    }
-  }, [isOpen, user]);
-
-  const fetchUserPreferences = async () => {
+  const fetchUserPreferences = useCallback(async () => {
     if (!user) return;
     
     const { data, error } = await supabase
@@ -69,7 +63,13 @@ export const TitlePreferencesModal = ({ isOpen, onClose }: TitlePreferencesModal
       setSuffixes(data.title_suffixes || []);
       setCustomText(data.custom_title_text || "");
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (isOpen && user) {
+      fetchUserPreferences();
+    }
+  }, [isOpen, user, fetchUserPreferences]);
 
   const savePreferences = async () => {
     if (!user) return;

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { BrowserMultiFormatReader } from "@zxing/browser";
+import { BrowserMultiFormatReader, IScannerControls } from "@zxing/browser";
 import { BarcodeFormat, DecodeHintType, ResultMetadataType } from "@zxing/library";
 
 export default function WebBarcodeScanner({ onCode, onClose, continuous = false, overlayLines = [] }: {
@@ -12,20 +12,20 @@ export default function WebBarcodeScanner({ onCode, onClose, continuous = false,
   const lastRef = useRef<{ code: string; ts: number }>({ code: "", ts: 0 });
 
   useEffect(() => {
-    const hints = new Map();
+    const hints: Map<DecodeHintType, unknown> = new Map();
     hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.EAN_13, BarcodeFormat.UPC_A, BarcodeFormat.EAN_8]);
     // Enable detection of EAN-2/EAN-5 add-on extensions (magazine issue/price)
-    hints.set(DecodeHintType.ALLOWED_EAN_EXTENSIONS as any, [2, 5]);
+    hints.set(DecodeHintType.ALLOWED_EAN_EXTENSIONS, [2, 5]);
     const reader = new BrowserMultiFormatReader(hints);
-    let controls: any;
+    let controls: IScannerControls | undefined;
 
     const constraints: MediaStreamConstraints = {
       audio: false,
-      video: ({
+      video: {
         facingMode: { ideal: "environment" },
         // Focus mode is not universally supported; browsers will ignore if unsupported
-        advanced: [{ focusMode: "continuous" }],
-      } as any),
+        advanced: [{ focusMode: "continuous" } as any],
+      } as MediaTrackConstraints,
     };
 
     (async () => {
@@ -37,14 +37,16 @@ export default function WebBarcodeScanner({ onCode, onClose, continuous = false,
             if (result) {
               let text = result.getText().trim();
               try {
-                const meta: any = result.getResultMetadata?.();
-                if (meta && typeof meta.get === 'function') {
-                  const ext = meta.get(ResultMetadataType.UPC_EAN_EXTENSION as any);
+                const meta = result.getResultMetadata?.();
+                if (meta instanceof Map) {
+                  const ext = meta.get(ResultMetadataType.UPC_EAN_EXTENSION);
                   if (ext && /^(\d{2}|\d{5})$/.test(String(ext))) {
                     text = text + String(ext);
                   }
                 }
-              } catch {}
+              } catch (err) {
+                console.warn('metadata parse error', err);
+              }
               
               // For EAN-13 codes, try to detect add-ons by looking for additional numbers
               // This is a basic implementation - real scanners might capture add-ons differently

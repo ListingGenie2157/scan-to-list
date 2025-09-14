@@ -21,7 +21,9 @@ export function useScannerSettings() {
   useEffect(() => {
     try {
       localStorage.setItem(KEY, mirrorCovers ? '1' : '0');
-    } catch {}
+    } catch (err) {
+      console.warn('Failed to save scanner setting', err);
+    }
   }, [mirrorCovers]);
 
   return { mirrorCovers, setMirrorCovers } as const;

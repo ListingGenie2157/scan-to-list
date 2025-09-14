@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -48,62 +48,75 @@ export function BulkListingModal({ selectedItems, isOpen, onClose }: BulkListing
   const [processingStatus, setProcessingStatus] = useState<ProcessingStatus>({});
   const [processedCount, setProcessedCount] = useState(0);
 
-  // Fetch item details when modal opens
-  useEffect(() => {
-    if (isOpen && selectedItems.length > 0) {
-      fetchItemDetails();
+    interface RawItem {
+      id: number;
+      title?: string | null;
+      authors?: string[] | null;
+      status?: string | null;
+      type?: string | null;
+      publisher?: string | null;
+      year?: number | null;
+      isbn13?: string | null;
+      created_at: string;
+      photos?: { public_url: string | null }[] | { public_url: string | null } | null;
     }
-  }, [isOpen, selectedItems]);
 
-  const fetchItemDetails = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('items')
-        .select(`
-          id,
-          title,
-          authors,
-          status,
-          type,
-          publisher,
-          year,
-          isbn13,
-          created_at,
-          photos (public_url)
-        `)
-        .in('id', selectedItems.map((id) => Number(id)));
+    const fetchItemDetails = useCallback(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('items')
+          .select(`
+            id,
+            title,
+            authors,
+            status,
+            type,
+            publisher,
+            year,
+            isbn13,
+            created_at,
+            photos (public_url)
+          `)
+          .in('id', selectedItems.map((id) => Number(id)));
 
-      if (error) throw error;
-      const mapped: InventoryItem[] = (data || []).map((it: any) => ({
-        id: String(it.id),
-        title: it.title ?? null,
-        author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,
-        status: it.status ?? 'draft',
-        suggested_category: it.type ?? 'book',
-        suggested_price: null,
-        suggested_title: null,
-        publisher: it.publisher ?? null,
-        publication_year: it.year ? Number(it.year) || null : null,
-        condition_assessment: null,
-        genre: null,
-        isbn: it.isbn13 ?? null,
-        issue_number: null,
-        issue_date: null,
-        created_at: it.created_at,
-        photos: Array.isArray(it.photos) ? it.photos[0] || null : it.photos || null,
-        confidence_score: null,
-      }));
-      setItems(mapped);
-      setSelectedForProcessing(selectedItems);
-    } catch (error) {
-      console.error('Error fetching items:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load item details",
-        variant: "destructive"
-      });
-    }
-  };
+        if (error) throw error;
+        const mapped: InventoryItem[] = (data as unknown as RawItem[] || []).map((it) => ({
+          id: String(it.id),
+          title: it.title ?? null,
+          author: Array.isArray(it.authors) ? it.authors.filter(Boolean).join(', ') : null,
+          status: it.status ?? 'draft',
+          suggested_category: it.type ?? 'book',
+          suggested_price: null,
+          suggested_title: null,
+          publisher: it.publisher ?? null,
+          publication_year: it.year ? Number(it.year) || null : null,
+          condition_assessment: null,
+          genre: null,
+          isbn: it.isbn13 ?? null,
+          issue_number: null,
+          issue_date: null,
+          created_at: it.created_at,
+          photos: Array.isArray(it.photos) ? it.photos[0] || null : it.photos || null,
+          confidence_score: null,
+        }));
+        setItems(mapped);
+        setSelectedForProcessing(selectedItems);
+      } catch (error) {
+        console.error('Error fetching items:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load item details",
+          variant: "destructive"
+        });
+      }
+    }, [selectedItems, toast]);
+
+    // Fetch item details when modal opens
+    useEffect(() => {
+      if (isOpen && selectedItems.length > 0) {
+        fetchItemDetails();
+      }
+    }, [isOpen, selectedItems, fetchItemDetails]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {

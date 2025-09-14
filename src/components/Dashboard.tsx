@@ -100,17 +100,18 @@ export const Dashboard = () => {
       } else {
         throw new Error('Unexpected response from eBay function');
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       setEbayStatus({
         connected: false,
         testing: false,
         lastTest: new Date(),
-        error: error.message
+        error: message
       });
-      
+
       toast({
         title: "eBay Connection Failed",
-        description: `Error: ${error.message}`,
+        description: `Error: ${message}`,
         variant: "destructive",
       });
     }
