@@ -96,7 +96,8 @@ export function CreateListingModal({ item, open, onOpenChange }: CreateListingMo
             isbn: item.isbn,
             genre: item.genre,
             issue_number: item.issue_number,
-            issue_date: item.issue_date
+            issue_date: item.issue_date,
+            issue_title: item.subtitle
           },
           userId: user?.id
         }

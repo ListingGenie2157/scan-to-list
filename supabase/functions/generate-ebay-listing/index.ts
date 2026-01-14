@@ -8,16 +8,70 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Convert ALL CAPS or inconsistent casing to proper Title Case
+function toTitleCase(str: string): string {
+  if (!str) return '';
+  // Handle ALL CAPS strings - convert to lowercase first
+  if (str === str.toUpperCase() && str.length > 3) {
+    str = str.toLowerCase();
+  }
+  // Minor words to keep lowercase (unless first word)
+  const minorWords = ['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 'on', 'or', 'so', 'the', 'to', 'up', 'yet'];
+  
+  return str
+    .split(' ')
+    .map((word, index) => {
+      const lower = word.toLowerCase();
+      // First word or not a minor word: capitalize
+      if (index === 0 || !minorWords.includes(lower)) {
+        return lower.charAt(0).toUpperCase() + lower.slice(1);
+      }
+      return lower;
+    })
+    .join(' ');
+}
+
+// Format month from date string for display
+function formatMonthYear(dateStr: string | null, year?: number | null): string | null {
+  if (!dateStr && !year) return null;
+  
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                      'July', 'August', 'September', 'October', 'November', 'December'];
+  
+  if (dateStr) {
+    // If it's already a human-readable format like "January 2024", return it
+    const monthYearMatch = dateStr.match(/([a-zA-Z]+)\s*(\d{4})/i);
+    if (monthYearMatch) {
+      return `${toTitleCase(monthYearMatch[1])} ${monthYearMatch[2]}`;
+    }
+    
+    // If it's ISO format "2024-01-01", convert to "January 2024"
+    const isoMatch = dateStr.match(/(\d{4})-(\d{2})/);
+    if (isoMatch) {
+      const monthIndex = parseInt(isoMatch[2], 10) - 1;
+      if (monthIndex >= 0 && monthIndex < 12) {
+        return `${monthNames[monthIndex]} ${isoMatch[1]}`;
+      }
+    }
+  }
+  
+  // Fallback to just year
+  if (year) return year.toString();
+  return null;
+}
+
 // Magazine title template builder - creates structured, SEO-optimized titles
 function buildMagazineTitle(itemData: ItemInfo, userPrefs?: UserPreferences): string {
   const MAX_LENGTH = 80;
   const parts: string[] = [];
   
+  console.log('Building magazine title with data:', JSON.stringify(itemData));
+  
   // 1. Always start with "New"
   parts.push("New");
   
   // 2. Publication name + Magazine (ensure "Magazine" is always included)
-  let pubName = itemData.title || '';
+  let pubName = toTitleCase(itemData.title || '');
   // Remove "magazine" if already in the title to avoid duplication
   pubName = pubName.replace(/\s*magazine\s*/i, ' ').trim();
   // Also clean up common patterns like "- " at the end
@@ -30,20 +84,26 @@ function buildMagazineTitle(itemData: ItemInfo, userPrefs?: UserPreferences): st
   }
   
   // 3. Issue title (if available and different from publication name)
-  if (itemData.issue_title && itemData.issue_title.toLowerCase() !== pubName.toLowerCase()) {
-    parts.push(`- ${itemData.issue_title}`);
+  if (itemData.issue_title) {
+    const issueTitle = toTitleCase(itemData.issue_title);
+    if (issueTitle.toLowerCase() !== pubName.toLowerCase()) {
+      parts.push(`- ${issueTitle}`);
+    }
   }
   
-  // 4. Issue number OR month/year
+  // 4. Issue number
   if (itemData.issue_number) {
-    parts.push(`#${itemData.issue_number}`);
+    // Clean up issue number - remove leading zeros, handle "Issue X" format
+    const cleanIssue = itemData.issue_number.replace(/^0+/, '').replace(/issue\s*/i, '');
+    if (cleanIssue) {
+      parts.push(`#${cleanIssue}`);
+    }
   }
   
-  // Format issue date (month/year)
-  if (itemData.issue_date) {
-    parts.push(itemData.issue_date);
-  } else if (itemData.publication_year) {
-    parts.push(itemData.publication_year.toString());
+  // 5. Format issue date (month/year) - use human readable format
+  const formattedDate = formatMonthYear(itemData.issue_date, itemData.publication_year);
+  if (formattedDate) {
+    parts.push(formattedDate);
   }
   
   // 5. Build initial title and check length
@@ -126,11 +186,17 @@ serve(async (req) => {
       userPreferences = data;
     }
 
-    // Detect if this is a magazine
-    const isMagazine = genre?.toLowerCase().includes('magazine') || 
-                       category?.toLowerCase().includes('magazine') || 
-                       issue_number || 
-                       issue_date;
+    // Detect if this is a magazine - improved detection
+    const isMagazine = 
+      genre?.toLowerCase().includes('magazine') || 
+      category?.toLowerCase().includes('magazine') || 
+      title?.toLowerCase().includes('magazine') ||
+      issue_number || 
+      issue_date ||
+      /\b(vol\.?|volume|issue|no\.?|number)\s*\d/i.test(title || '') ||
+      /\b(weekly|monthly|quarterly|annual)\b/i.test(genre || '');
+    
+    console.log('Magazine detection:', { isMagazine, genre, category, title, issue_number, issue_date });
     
     let optimizedTitle: string;
     let descriptionPrompt: string;
@@ -141,6 +207,8 @@ serve(async (req) => {
         { title, issue_title, issue_number, issue_date, publication_year },
         userPreferences || undefined
       );
+      
+      console.log('Generated magazine title:', optimizedTitle);
       
       // AI generates description only for magazines
       descriptionPrompt = `Create a compelling eBay description (200-300 words) for this magazine:
@@ -223,7 +291,16 @@ Format your response as JSON with "title" and "description" fields.`;
       const generatedContent = data.choices[0].message.content;
 
       try {
-        const parsed = JSON.parse(generatedContent);
+        // Strip markdown code blocks if present
+        let contentToParse = generatedContent;
+        if (contentToParse.includes('```json')) {
+          contentToParse = contentToParse.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+        } else if (contentToParse.includes('```')) {
+          contentToParse = contentToParse.replace(/```\s*/g, '');
+        }
+        contentToParse = contentToParse.trim();
+        
+        const parsed = JSON.parse(contentToParse);
         optimizedTitle = parsed.title || title || 'Item for Sale';
         
         // Truncate title if needed
