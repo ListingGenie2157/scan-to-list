@@ -10,6 +10,7 @@ import WebBarcodeScanner from '@/components/WebBarcodeScanner';
 import { normalizeScan, lookupIsbn, upsertItem, storeCover, type LookupMeta } from '@/lib/scanning';
 import { useScannerSettings } from '@/hooks/useScannerSettings';
 import { useItemTypeSetting } from '@/hooks/useItemTypeSetting';
+import { ItemTypeToggle } from '@/components/ItemTypeToggle';
 import { ScanMeta } from '@/types/scan';
 
   interface BatchScanModalProps {
@@ -25,7 +26,7 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
   const recentSet = useRef<Map<string, number>>(new Map());
   const { toast } = useToast();
   const { mirrorCovers, setMirrorCovers } = useScannerSettings();
-  const { itemType } = useItemTypeSetting();
+  const { itemType, setItemType } = useItemTypeSetting();
 
   const addLastScan = (line: string) => {
     setLastScans((prev) => [...prev.slice(-5), line]); // Keep last 5 scans
@@ -155,6 +156,12 @@ export function BatchScanModal({ open, onOpenChange, onSuccess }: BatchScanModal
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Item Type Toggle - Prominent */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">What are you scanning?</Label>
+              <ItemTypeToggle value={itemType} onChange={setItemType} className="w-full justify-center" />
+            </div>
+
             <div className="bg-muted/50 p-4 rounded-lg">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-sm font-medium">Scanner Status</span>

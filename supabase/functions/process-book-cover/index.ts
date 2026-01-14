@@ -138,6 +138,7 @@ serve(async (req) => {
       photoId?: string;
       imageUrl?: string;
       batchSettings?: { autoOptimize?: boolean };
+      itemType?: 'book' | 'magazine' | 'bundle';
     } = {};
     try {
       requestData = await req.json();
@@ -146,6 +147,7 @@ serve(async (req) => {
     }
 
     const photoId = cleanStr(requestData.photoId);
+    const userSelectedItemType = requestData.itemType; // User-selected type from UI
     const imageUrl = cleanStr(requestData.imageUrl);
 
     if (!photoId || !imageUrl) {
@@ -499,10 +501,13 @@ serve(async (req) => {
       return json(401, { success: false, error: "Not signed in; cannot write inventory item" });
     }
 
-    console.log(`Processing photo ${photoId} for user ${userId}, existing item_id: ${photoRecord?.item_id}`);
+    console.log(`Processing photo ${photoId} for user ${userId}, existing item_id: ${photoRecord?.item_id}, userSelectedItemType: ${userSelectedItemType}`);
 
     // 2) Upsert inventory_items with proper category classification
-    const suggested_category = (cleaned.genre?.toLowerCase().includes("magazine") || cleaned.issue_number) ? "magazine" : "book";
+    // PRIORITY: User-selected type > Auto-detection from OCR
+    const autoDetectedCategory = (cleaned.genre?.toLowerCase().includes("magazine") || cleaned.issue_number) ? "magazine" : "book";
+    const suggested_category = userSelectedItemType === 'bundle' ? 'book' : (userSelectedItemType || autoDetectedCategory);
+    console.log(`Category classification: userSelected=${userSelectedItemType}, autoDetected=${autoDetectedCategory}, final=${suggested_category}`);
     
     const { data: inventoryItem, error: dbErr } = await supabase
       .from("inventory_items")
@@ -543,10 +548,12 @@ serve(async (req) => {
 
     // 3) Sync to items table - map fields according to schema
     let itemId = photoRecord?.item_id;
+    // Use user-selected type for items table as well
+    const itemType = userSelectedItemType === 'bundle' ? 'book' : (userSelectedItemType || autoDetectedCategory);
     const itemData = {
       user_id: userId,
       title: cleaned.title || "Untitled",
-      type: (cleaned.genre?.toLowerCase().includes("magazine")) ? "magazine" : "book",
+      type: itemType,
       status: "processed",
       suggested_price,
       authors: cleaned.author ? [cleaned.author] : null,
