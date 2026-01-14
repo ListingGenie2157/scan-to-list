@@ -32,4 +32,5 @@ export interface InventoryItem {
   amazon_match_confidence?: number | null;
   description?: string | null;
   photo_id?: string | number | null;
+  subtitle?: string | null;
 }
