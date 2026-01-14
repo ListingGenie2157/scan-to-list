@@ -11,10 +11,10 @@ import { BatchSettingsModal } from "./BatchSettingsModal";
 import WebBarcodeScanner from "@/components/WebBarcodeScanner";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { normalizeScan, lookupIsbn, upsertItem, storeCover } from "@/lib/scanning";
 import { useScannerSettings } from "@/hooks/useScannerSettings";
 import { useItemTypeSetting } from "@/hooks/useItemTypeSetting";
+import { ItemTypeToggle } from "@/components/ItemTypeToggle";
 
 
 interface BatchSettings {
@@ -265,14 +265,16 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
           console.log('OCR request payload:', { 
             photoId: photoData.id, 
             imageUrl: publicUrl,
-            batchSettings: batchSettings
+            batchSettings: batchSettings,
+            itemType: itemType
           });
           
           const { data: ocrData, error: ocrError } = await supabase.functions.invoke('process-book-cover', {
             body: { 
               photoId: photoData.id, 
               imageUrl: publicUrl,
-              batchSettings: batchSettings
+              batchSettings: batchSettings,
+              itemType: itemType // Pass user-selected item type to override auto-detection
             }
           });
           console.log('📋 OCR response:', { ocrData, ocrError });
@@ -375,6 +377,12 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
         </DialogHeader>
 
         <div className="space-y-4 flex-1 overflow-y-auto">
+          {/* Item Type Toggle - Prominent at top */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">What are you adding?</Label>
+            <ItemTypeToggle value={itemType} onChange={setItemType} />
+          </div>
+
           {/* Upload Area */}
           <div
             className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
@@ -428,24 +436,9 @@ export const UploadModal = ({ open, onOpenChange, onUploadSuccess, autoOpenScann
               <Camera className="w-4 h-4 mr-2" />
               Scan Barcode
             </Button>
-            <div className="mt-3 flex items-center justify-center gap-4 flex-wrap">
-              <div className="flex items-center gap-2">
-                <Label className="text-sm">Item Type</Label>
-                <Select value={itemType} onValueChange={(v) => setItemType(v as 'book' | 'magazine' | 'bundle')}>
-                  <SelectTrigger className="w-40 bg-background">
-                    <SelectValue placeholder="Item Type" />
-                  </SelectTrigger>
-                  <SelectContent className="z-[60] bg-popover">
-                    <SelectItem value="book">Book</SelectItem>
-                    <SelectItem value="magazine">Magazine</SelectItem>
-                    <SelectItem value="bundle">Bundle</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex items-center gap-2">
-                <Switch id="mirror-covers-upload" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
-                <Label htmlFor="mirror-covers-upload">Mirror external covers to storage</Label>
-              </div>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <Switch id="mirror-covers-upload" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
+              <Label htmlFor="mirror-covers-upload">Mirror external covers to storage</Label>
             </div>
             {barcode && (
               <div className="mt-2 p-2 bg-muted rounded text-sm">

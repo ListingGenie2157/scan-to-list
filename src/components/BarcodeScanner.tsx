@@ -10,6 +10,7 @@ import { normalizeScan, lookupIsbn, upsertItem, storeCover, type LookupMeta } fr
 import { useScannerSettings } from '@/hooks/useScannerSettings';
 import { useItemTypeSetting } from '@/hooks/useItemTypeSetting';
 import { MagazineIssueModal } from '@/components/MagazineIssueModal';
+import { ItemTypeToggle } from '@/components/ItemTypeToggle';
 import { ScanMeta, ItemType } from '@/types/scan';
 
 interface BarcodeScannerProps {
@@ -37,7 +38,7 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
   const recentSet = useRef<Map<string, number>>(new Map<string, number>());
   const { toast } = useToast();
   const { mirrorCovers, setMirrorCovers } = useScannerSettings();
-  const { itemType } = useItemTypeSetting();
+  const { itemType, setItemType } = useItemTypeSetting();
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const isMounted = useRef(true);
@@ -238,20 +239,28 @@ export const BarcodeScannerComponent = ({ onScanSuccess }: BarcodeScannerProps) 
 
   return (
     <>
-      <div className="flex items-center gap-4 flex-wrap">
-        <Button onClick={startScan} disabled={isProcessing || showWebScanner}>
-          <Camera className="w-4 h-4 mr-2" />
-          {scanButtonLabel}
-        </Button>
+      <div className="space-y-4">
+        {/* Item Type Toggle - Prominent */}
+        <div className="space-y-2">
+          <Label className="text-sm font-medium">What are you scanning?</Label>
+          <ItemTypeToggle value={itemType} onChange={setItemType} />
+        </div>
 
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <div className="flex items-center space-x-2">
-            <Switch id="batch-scan" checked={batchMode} onCheckedChange={setBatchMode} />
-            <Label htmlFor="batch-scan">Batch Scan (keep scanner open)</Label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <Switch id="mirror-covers" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
-            <Label htmlFor="mirror-covers">Auto-populate book covers</Label>
+        <div className="flex items-center gap-4 flex-wrap">
+          <Button onClick={startScan} disabled={isProcessing || showWebScanner}>
+            <Camera className="w-4 h-4 mr-2" />
+            {scanButtonLabel}
+          </Button>
+
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+            <div className="flex items-center space-x-2">
+              <Switch id="batch-scan" checked={batchMode} onCheckedChange={setBatchMode} />
+              <Label htmlFor="batch-scan">Batch Scan (keep scanner open)</Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Switch id="mirror-covers" checked={mirrorCovers} onCheckedChange={setMirrorCovers} />
+              <Label htmlFor="mirror-covers">Auto-populate book covers</Label>
+            </div>
           </div>
         </div>
       </div>

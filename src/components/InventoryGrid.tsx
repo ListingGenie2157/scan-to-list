@@ -5,7 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Filter, Package, Clock, CheckCircle, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2, Plus, DollarSign, Edit, ExternalLink, Settings } from "lucide-react";
+import { Search, Filter, Package, Clock, CheckCircle, Calendar, BookOpen, Grid3X3, List, LayoutGrid, Edit3, Download, Trash2, Plus, DollarSign, Edit, ExternalLink, Settings, Newspaper } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/components/ui/use-toast";
@@ -706,8 +707,36 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
     );
   };
 
+  // Calculate counts for tabs
+  const allCount = inventory.length;
+  const bookCount = inventory.filter(item => item.type === 'book' || item.suggested_category === 'book').length;
+  const magazineCount = inventory.filter(item => item.type === 'magazine' || item.suggested_category === 'magazine').length;
+  const bundleCount = inventory.filter(item => item.type === 'bundle').length;
+
   return (
     <div className="space-y-6">
+      {/* Type Tabs - Prominent at top */}
+      <Tabs value={typeFilter} onValueChange={setTypeFilter} className="w-full">
+        <TabsList className="grid w-full grid-cols-4 h-12">
+          <TabsTrigger value="all" className="flex items-center gap-2 text-sm">
+            <Package className="w-4 h-4" />
+            All ({allCount})
+          </TabsTrigger>
+          <TabsTrigger value="book" className="flex items-center gap-2 text-sm">
+            <BookOpen className="w-4 h-4" />
+            Books ({bookCount})
+          </TabsTrigger>
+          <TabsTrigger value="magazine" className="flex items-center gap-2 text-sm">
+            <Newspaper className="w-4 h-4" />
+            Magazines ({magazineCount})
+          </TabsTrigger>
+          <TabsTrigger value="bundle" className="flex items-center gap-2 text-sm">
+            <Package className="w-4 h-4" />
+            Bundles ({bundleCount})
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {/* Controls */}
       <div className="flex flex-col gap-4">
         {/* Search and Filters */}
@@ -744,18 +773,6 @@ export const InventoryGrid = forwardRef<InventoryGridRef>((props, ref) => {
                 <SelectItem value="all">All Categories</SelectItem>
                 <SelectItem value="book">Books</SelectItem>
                 <SelectItem value="magazine">Magazines</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="book">Book</SelectItem>
-                <SelectItem value="magazine">Magazine</SelectItem>
-                <SelectItem value="bundle">Bundle</SelectItem>
               </SelectContent>
             </Select>
           </div>
