@@ -395,14 +395,25 @@ export function CreateListingModal({ item, open, onOpenChange }: CreateListingMo
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="title">Listing Title</Label>
+              <div className="flex justify-between items-center">
+                <Label htmlFor="title">Listing Title</Label>
+                <span className={`text-xs ${listingData.title.length > 80 ? 'text-destructive font-medium' : listingData.title.length > 70 ? 'text-warning' : 'text-muted-foreground'}`}>
+                  {listingData.title.length}/80 characters
+                </span>
+              </div>
               <Input
                 id="title"
                 value={listingData.title}
-                onChange={(e) => setListingData({...listingData, title: e.target.value})}
+                onChange={(e) => setListingData({...listingData, title: e.target.value.slice(0, 80)})}
                 placeholder="Enter listing title"
                 required
+                maxLength={80}
               />
+              {listingData.category === 'magazine' && (
+                <p className="text-xs text-muted-foreground">
+                  Magazine titles start with "New" and include "Magazine" after the publication name.
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
