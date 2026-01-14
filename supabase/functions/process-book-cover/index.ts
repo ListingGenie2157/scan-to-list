@@ -54,6 +54,43 @@ function calculatePrice(info: PriceInfo): number {
   return Math.round(base * 100) / 100;
 }
 
+// Converts strings like "January 2024" to ISO date format "2024-01-01"
+function parseIssueDateToISO(dateStr: string | null): string | null {
+  if (!dateStr) return null;
+  
+  const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 
+                      'july', 'august', 'september', 'october', 'november', 'december'];
+  
+  // Match patterns like "January 2024", "Jan 2024"
+  const monthYearMatch = dateStr.match(/([a-zA-Z]+)\s*(\d{4})/i);
+  if (monthYearMatch) {
+    const monthName = monthYearMatch[1].toLowerCase();
+    const year = parseInt(monthYearMatch[2], 10);
+    const monthIndex = monthNames.findIndex(m => m.startsWith(monthName.slice(0, 3)));
+    if (monthIndex !== -1 && year >= 1900 && year <= 2100) {
+      return `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+    }
+  }
+  
+  // Match patterns like "2024-01" or "2024/01"
+  const yearMonthMatch = dateStr.match(/(\d{4})[-\/](\d{1,2})/);
+  if (yearMonthMatch) {
+    const year = parseInt(yearMonthMatch[1], 10);
+    const month = parseInt(yearMonthMatch[2], 10);
+    if (year >= 1900 && year <= 2100 && month >= 1 && month <= 12) {
+      return `${year}-${String(month).padStart(2, '0')}-01`;
+    }
+  }
+  
+  // If already in YYYY-MM-DD format, return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return dateStr;
+  }
+  
+  // Can't parse - return null to avoid DB error
+  return null;
+}
+
 const VISION_PROMPT = `Analyze this image and extract information about the book(s), magazine(s), or other items shown.
 Return only JSON, matching this schema exactly (no extra keys):
 {
@@ -484,7 +521,7 @@ serve(async (req) => {
         suggested_category,
         confidence_score: cleaned.confidence_score,
         issue_number: cleaned.issue_number,
-        issue_date: cleaned.issue_date,
+        issue_date: parseIssueDateToISO(cleaned.issue_date),
         series_title: cleaned.series_title,
         edition: cleaned.edition,
         status: "processed",
