@@ -8,6 +8,94 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Magazine title template builder - creates structured, SEO-optimized titles
+function buildMagazineTitle(itemData: ItemInfo, userPrefs?: UserPreferences): string {
+  const MAX_LENGTH = 80;
+  const parts: string[] = [];
+  
+  // 1. Always start with "New"
+  parts.push("New");
+  
+  // 2. Publication name + Magazine (ensure "Magazine" is always included)
+  let pubName = itemData.title || '';
+  // Remove "magazine" if already in the title to avoid duplication
+  pubName = pubName.replace(/\s*magazine\s*/i, ' ').trim();
+  // Also clean up common patterns like "- " at the end
+  pubName = pubName.replace(/[-–—]\s*$/, '').trim();
+  
+  if (pubName) {
+    parts.push(`${pubName} Magazine`);
+  } else {
+    parts.push("Magazine");
+  }
+  
+  // 3. Issue title (if available and different from publication name)
+  if (itemData.issue_title && itemData.issue_title.toLowerCase() !== pubName.toLowerCase()) {
+    parts.push(`- ${itemData.issue_title}`);
+  }
+  
+  // 4. Issue number OR month/year
+  if (itemData.issue_number) {
+    parts.push(`#${itemData.issue_number}`);
+  }
+  
+  // Format issue date (month/year)
+  if (itemData.issue_date) {
+    parts.push(itemData.issue_date);
+  } else if (itemData.publication_year) {
+    parts.push(itemData.publication_year.toString());
+  }
+  
+  // 5. Build initial title and check length
+  let title = parts.join(' ');
+  
+  // 6. Add SEO keywords if there's room
+  const seoKeywords = ['Vintage', 'Collectible', 'Rare', 'Classic', 'Original', 'Print'];
+  
+  for (const keyword of seoKeywords) {
+    const potentialTitle = `${title} ${keyword}`;
+    if (potentialTitle.length <= MAX_LENGTH) {
+      title = potentialTitle;
+    } else {
+      break;
+    }
+  }
+  
+  // 7. Apply user preferences if available and there's room
+  if (userPrefs?.title_suffixes?.length) {
+    for (const suffix of userPrefs.title_suffixes) {
+      const potentialTitle = `${title} ${suffix}`;
+      if (potentialTitle.length <= MAX_LENGTH) {
+        title = potentialTitle;
+        break;
+      }
+    }
+  }
+  
+  // 8. Smart truncation if still over limit
+  if (title.length > MAX_LENGTH) {
+    const words = title.split(' ');
+    let truncated = '';
+    for (const word of words) {
+      const nextTruncated = truncated ? `${truncated} ${word}` : word;
+      if (nextTruncated.length <= MAX_LENGTH) {
+        truncated = nextTruncated;
+      } else {
+        break;
+      }
+    }
+    title = truncated;
+  }
+  
+  return title;
+}
+
+interface UserPreferences {
+  title_prefixes?: string[];
+  title_suffixes?: string[];
+  custom_title_text?: string;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -20,7 +108,7 @@ serve(async (req) => {
       throw new Error('Item data is required');
     }
 
-    const { title, author, publisher, publication_year, condition, category, isbn, genre, issue_number, issue_date } = itemData;
+    const { title, author, publisher, publication_year, condition, category, isbn, genre, issue_number, issue_date, issue_title } = itemData;
 
     // Get user preferences for title additions
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -28,7 +116,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
     
-    let userPreferences = null;
+    let userPreferences: UserPreferences | null = null;
     if (userId) {
       const { data } = await supabase
         .from('user_profiles')
@@ -38,25 +126,58 @@ serve(async (req) => {
       userPreferences = data;
     }
 
-    // Create a detailed prompt for eBay listing optimization
-    const isMagazine = genre?.toLowerCase().includes('magazine') || category?.toLowerCase().includes('magazine') || issue_number;
+    // Detect if this is a magazine
+    const isMagazine = genre?.toLowerCase().includes('magazine') || 
+                       category?.toLowerCase().includes('magazine') || 
+                       issue_number || 
+                       issue_date;
     
-    const prompt = `Create an SEO-optimized eBay listing for this ${isMagazine ? 'magazine' : 'item'}:
+    let optimizedTitle: string;
+    let descriptionPrompt: string;
+    
+    if (isMagazine) {
+      // For magazines: Use template-based title generation (not AI)
+      optimizedTitle = buildMagazineTitle(
+        { title, issue_title, issue_number, issue_date, publication_year },
+        userPreferences || undefined
+      );
+      
+      // AI generates description only for magazines
+      descriptionPrompt = `Create a compelling eBay description (200-300 words) for this magazine:
+
+Magazine: ${title || 'Unknown'}
+Issue Title: ${issue_title || 'Not specified'}
+Issue Number: ${issue_number || 'Unknown'}
+Issue Date: ${issue_date || 'Unknown'}
+Year: ${publication_year || 'Unknown'}
+Condition: ${condition || 'Good'}
+
+The description should:
+- Highlight key selling points and any special features (cover stories, interviews, notable articles)
+- Include condition details
+- Use relevant keywords for eBay search (vintage, collectible, rare, etc.)
+- Have a professional, trustworthy tone
+- Appeal to magazine collectors and enthusiasts
+- Mention that shipping and handling will be done carefully
+
+Respond with ONLY the description text, no JSON or formatting.`;
+    } else {
+      // For non-magazines: Use AI for both title and description
+      const fullPrompt = `Create an SEO-optimized eBay listing for this item:
 
 Title: ${title || 'Unknown'}
-${isMagazine ? 'Issue Number:' : 'Author:'} ${isMagazine ? (issue_number || 'Unknown') : (author || 'Unknown')}
+Author: ${author || 'Unknown'}
 Publisher: ${publisher || 'Unknown'}
-${isMagazine ? 'Issue Date:' : 'Year:'} ${isMagazine ? (issue_date || publication_year || 'Unknown') : (publication_year || 'Unknown')}
+Year: ${publication_year || 'Unknown'}
 Condition: ${condition || 'Good'}
-Category: ${category || (isMagazine ? 'Magazine' : 'Book')}
+Category: ${category || 'Book'}
 ISBN: ${isbn || 'Not available'}
 Genre: ${genre || 'Unknown'}
 
 Please generate:
 1. An eBay title that is EXACTLY 80 characters or less (prefer 76-80) that includes:
-   ${isMagazine ? '- MUST include the word "Magazine" right after the magazine name' : '- Book title and author'}
-   ${isMagazine ? '- Structure: "{Magazine Name} Magazine {Month YYYY} Issue {#} – {Main Topic}"' : '- Include key descriptive terms'}
-   ${isMagazine ? '- Include month/year/issue number if available' : '- Include author and key descriptive terms'}
+   - Book title and author
+   - Include key descriptive terms
    - Use relevant keywords that collectors and buyers search for
    - Include condition if space allows
    ${userPreferences?.title_prefixes?.length ? `- MUST include these prefixes: ${userPreferences.title_prefixes.join(', ')}` : ''}
@@ -64,7 +185,7 @@ Please generate:
    ${userPreferences?.custom_title_text ? `- MUST include this text: "${userPreferences.custom_title_text}"` : ''}
 2. A compelling description (200-300 words) that:
    - Highlights key selling points
-   ${isMagazine ? '- Mentions issue details and any special features (cover stories, interviews, etc.)' : '- Includes author credentials and book highlights'}
+   - Includes author credentials and book highlights
    - Includes condition details and any flaws
    - Uses relevant keywords for eBay search
    - Has a professional, trustworthy tone
@@ -72,9 +193,74 @@ Please generate:
    - Mentions shipping and return policy basics
 
 CRITICAL: Ensure the title is exactly 80 characters or less. Count characters carefully.
-Format your response as JSON with "title" and "description" fields. Do not include pricing in your response as that will be calculated separately.`;
+Format your response as JSON with "title" and "description" fields.`;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { 
+              role: 'system', 
+              content: 'You are an expert eBay listing optimizer. Generate compelling, SEO-friendly titles and descriptions that maximize visibility and sales potential. Always respond with valid JSON.' 
+            },
+            { role: 'user', content: fullPrompt }
+          ],
+          max_tokens: 1000,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`OpenAI API error: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const generatedContent = data.choices[0].message.content;
+
+      try {
+        const parsed = JSON.parse(generatedContent);
+        optimizedTitle = parsed.title || title || 'Item for Sale';
+        
+        // Truncate title if needed
+        if (optimizedTitle.length > 80) {
+          const words = optimizedTitle.split(' ');
+          let truncated = '';
+          for (const word of words) {
+            if ((truncated + ' ' + word).trim().length <= 80) {
+              truncated = (truncated + ' ' + word).trim();
+            } else {
+              break;
+            }
+          }
+          optimizedTitle = truncated;
+        }
+        
+        // Return early for non-magazines
+        const marketPrice = await getMarketBasedPricing(itemData);
+        return new Response(JSON.stringify({ 
+          success: true,
+          optimizedListing: {
+            title: optimizedTitle,
+            description: parsed.description,
+            price: marketPrice
+          }
+        }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      } catch (parseError) {
+        console.error('Failed to parse AI response:', parseError);
+        optimizedTitle = title || 'Item for Sale';
+        descriptionPrompt = generatedContent;
+      }
+    }
+
+    // For magazines: Generate description with AI
+    const descResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openAIApiKey}`,
@@ -85,73 +271,32 @@ Format your response as JSON with "title" and "description" fields. Do not inclu
         messages: [
           { 
             role: 'system', 
-            content: 'You are an expert eBay listing optimizer. Generate compelling, SEO-friendly titles and descriptions that maximize visibility and sales potential. Always respond with valid JSON.' 
+            content: 'You are an expert eBay listing writer specializing in magazine descriptions. Write compelling, SEO-friendly descriptions that appeal to collectors.' 
           },
-          { role: 'user', content: prompt }
+          { role: 'user', content: descriptionPrompt }
         ],
-        max_tokens: 1000,
+        max_tokens: 800,
         temperature: 0.7,
       }),
     });
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.statusText}`);
+    if (!descResponse.ok) {
+      throw new Error(`OpenAI API error: ${descResponse.statusText}`);
     }
 
-    const data = await response.json();
-    const generatedContent = data.choices[0].message.content;
+    const descData = await descResponse.json();
+    const generatedDescription = descData.choices[0].message.content;
 
-    // Parse the JSON response
-    let optimizedListing;
-    try {
-      optimizedListing = JSON.parse(generatedContent);
-      
-      // Post-process title to ensure 80 char limit and magazine requirements
-      if (optimizedListing.title) {
-        let processedTitle = optimizedListing.title;
-        
-        // For magazines, ensure "Magazine" is included
-        if (isMagazine && !processedTitle.toLowerCase().includes('magazine')) {
-          const titleParts = processedTitle.split(' ');
-          if (titleParts.length > 0) {
-            titleParts.splice(1, 0, 'Magazine');
-            processedTitle = titleParts.join(' ');
-          }
-        }
-        
-        // Truncate to 80 characters without cutting words
-        if (processedTitle.length > 80) {
-          const words = processedTitle.split(' ');
-          let truncated = '';
-          for (const word of words) {
-            if ((truncated + word).length <= 80) {
-              truncated += (truncated ? ' ' : '') + word;
-            } else {
-              break;
-            }
-          }
-          processedTitle = truncated;
-        }
-        
-        optimizedListing.title = processedTitle;
-      }
-    } catch (parseError) {
-      // Fallback if JSON parsing fails
-      optimizedListing = {
-        title: title || 'Item for Sale',
-        description: generatedContent
-      };
-    }
-
-    // Generate market-based pricing using ebay-app-search function
+    // Generate market-based pricing
     const marketPrice = await getMarketBasedPricing(itemData);
-    if (marketPrice) {
-      optimizedListing.price = marketPrice;
-    }
 
     return new Response(JSON.stringify({ 
       success: true,
-      optimizedListing
+      optimizedListing: {
+        title: optimizedTitle,
+        description: generatedDescription,
+        price: marketPrice
+      }
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -167,7 +312,6 @@ Format your response as JSON with "title" and "description" fields. Do not inclu
     });
   }
 });
-
 // Function to get market-based pricing using the ebay-app-search edge function
 interface ItemInfo {
   title?: string;
@@ -176,6 +320,9 @@ interface ItemInfo {
   condition?: string;
   category?: string;
   publication_year?: number;
+  issue_title?: string;
+  issue_number?: string;
+  issue_date?: string;
 }
 
 async function getMarketBasedPricing(itemData: ItemInfo): Promise<number | null> {

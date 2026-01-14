@@ -748,10 +748,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      cleanup_expired_oauth_states: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
+      cleanup_expired_oauth_states: { Args: never; Returns: undefined }
       update_title_preferences: {
         Args: {
           custom_text?: string
