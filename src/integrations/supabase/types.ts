@@ -710,7 +710,9 @@ export type Database = {
           id: string
           images_used_this_month: number | null
           monthly_image_limit: number | null
+          shipping_keywords: string[] | null
           subscription_tier: string | null
+          title_keywords: string[] | null
           title_prefixes: string[] | null
           title_suffixes: string[] | null
           updated_at: string | null
@@ -723,7 +725,9 @@ export type Database = {
           id: string
           images_used_this_month?: number | null
           monthly_image_limit?: number | null
+          shipping_keywords?: string[] | null
           subscription_tier?: string | null
+          title_keywords?: string[] | null
           title_prefixes?: string[] | null
           title_suffixes?: string[] | null
           updated_at?: string | null
@@ -736,7 +740,9 @@ export type Database = {
           id?: string
           images_used_this_month?: number | null
           monthly_image_limit?: number | null
+          shipping_keywords?: string[] | null
           subscription_tier?: string | null
+          title_keywords?: string[] | null
           title_prefixes?: string[] | null
           title_suffixes?: string[] | null
           updated_at?: string | null
@@ -749,15 +755,27 @@ export type Database = {
     }
     Functions: {
       cleanup_expired_oauth_states: { Args: never; Returns: undefined }
-      update_title_preferences: {
-        Args: {
-          custom_text?: string
-          prefixes?: string[]
-          suffixes?: string[]
-          user_id_param: string
-        }
-        Returns: undefined
-      }
+      update_title_preferences:
+        | {
+            Args: {
+              custom_text?: string
+              prefixes?: string[]
+              suffixes?: string[]
+              user_id_param: string
+            }
+            Returns: undefined
+          }
+        | {
+            Args: {
+              custom_text?: string
+              keywords?: string[]
+              prefixes?: string[]
+              shipping_kw?: string[]
+              suffixes?: string[]
+              user_id_param: string
+            }
+            Returns: undefined
+          }
     }
     Enums: {
       [_ in never]: never
