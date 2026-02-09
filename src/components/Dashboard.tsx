@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle, LogOut, User, Sparkles, Settings } from "lucide-react";
+import { Upload, Camera, Package, TrendingUp, Clock, CheckCircle, AlertCircle, LogOut, User, Sparkles, Settings, Tags } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -11,6 +11,7 @@ import { UploadModal } from "./UploadModal";
 import { InventoryGrid, type InventoryGridRef } from "./InventoryGrid";
 import { BundleSuggestionsModal } from "./BundleSuggestionsModal";
 import { ConnectEbayButton } from "./ConnectEbayButton";
+import { TitlePreferencesModal } from "./TitlePreferencesModal";
 
 import { AutoListingSettings } from "./AutoListingSettings";
 import { ListingApprovalsPage } from "./ListingApprovalsPage";
@@ -23,6 +24,7 @@ export const Dashboard = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [autoOpenScanner, setAutoOpenScanner] = useState(false);
   const [showBundleSuggestions, setShowBundleSuggestions] = useState(false);
+  const [showTitlePrefs, setShowTitlePrefs] = useState(false);
   const [activeTab, setActiveTab] = useState<"overview" | "inventory" | "auto-listing" | "approvals">("overview");
   const [ebayStatus, setEbayStatus] = useState<{
     connected: boolean;
@@ -188,6 +190,17 @@ export const Dashboard = () => {
                 <span className="hidden sm:inline ml-2">Upload Photos</span>
               </Button>
               
+              {/* Title Keywords button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowTitlePrefs(true)}
+                title="Title Keywords"
+              >
+                <Tags className="w-4 h-4" />
+                <span className="hidden sm:inline ml-2">Title Keywords</span>
+              </Button>
+
               {/* User menu - simplified for mobile */}
               <div className="hidden sm:flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="w-4 h-4" />
@@ -500,6 +513,10 @@ export const Dashboard = () => {
       <BundleSuggestionsModal 
         isOpen={showBundleSuggestions}
         onClose={() => setShowBundleSuggestions(false)}
+      />
+      <TitlePreferencesModal
+        isOpen={showTitlePrefs}
+        onClose={() => setShowTitlePrefs(false)}
       />
     </div>
   );
