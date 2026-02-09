@@ -70,16 +70,13 @@ function buildMagazineTitle(itemData: ItemInfo, userPrefs?: UserPreferences): st
   // Remove nulls and empty strings
   const validParts = parts.filter((p): p is string => p !== null && p.trim() !== '');
 
-  // Join, remove duplicate words
-  const seen = new Set<string>();
+  // Remove consecutive duplicate words only (e.g., "Magazine Magazine" → "Magazine")
   let title = validParts
     .join(' ')
     .split(' ')
-    .filter((word) => {
-      const lower = word.toLowerCase();
-      if (seen.has(lower)) return false;
-      seen.add(lower);
-      return true;
+    .filter((word, i, arr) => {
+      if (i === 0) return true;
+      return word.toLowerCase() !== arr[i - 1].toLowerCase();
     })
     .join(' ');
 

@@ -92,15 +92,12 @@ function buildDeterministicTitle(cleaned: {
   // Join with spaces
   let title = validParts.join(" ");
 
-  // Remove duplicate words (case-insensitive, preserve first occurrence)
-  const seen = new Set<string>();
+  // Remove consecutive duplicate words only (e.g., "Magazine Magazine" → "Magazine")
   title = title
     .split(" ")
-    .filter((word) => {
-      const lower = word.toLowerCase();
-      if (seen.has(lower)) return false;
-      seen.add(lower);
-      return true;
+    .filter((word, i, arr) => {
+      if (i === 0) return true;
+      return word.toLowerCase() !== arr[i - 1].toLowerCase();
     })
     .join(" ");
 
@@ -189,6 +186,7 @@ RULES:
 - "included_items" = any "Plus:", "Includes:", "Inside:" text visible on cover.
 - "promotional_hook" = numeric hooks, taglines, or feature callouts on the cover.
 - If you see "Magazine", "Vol.", "Volume", "Issue", "No.", or monthly/quarterly dating → item_type = "magazine".
+- If a retail barcode or cover price box is visible but no ISBN is present, set item_type = "magazine".
 - If it has an ISBN and chapters → item_type = "book".
 - confidence_score in [0,1].
 Return JSON only.`;
@@ -600,7 +598,7 @@ serve(async (req) => {
       .upsert({
         user_id: userId,
         photo_id: photoId,
-        title: cleaned.masthead_title,
+        title: deterministic_title,
         subtitle: cleaned.main_subtitle,
         suggested_title: deterministic_title,
         author: cleaned.author,
@@ -726,7 +724,6 @@ serve(async (req) => {
           
           // Update inventory item with optimized data
           const optimizeUpdatePayload: Record<string, unknown> = {
-            suggested_title: optimizeResult.optimizedListing.title,
             description: optimizeResult.optimizedListing.description,
           };
 
