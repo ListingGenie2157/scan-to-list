@@ -1,4 +1,4 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts"; // only needed if a lib expects XHR
+// XHR polyfill removed - not needed for fetch-based calls
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.53.0";
 
@@ -37,21 +37,89 @@ function toIntOrNull(v: unknown) {
 }
 
 interface PriceInfo {
-  genre?: string;
+  item_type?: string;
   publication_year?: number;
   condition_assessment?: string;
-  series_title?: string;
+  promotional_hook?: string;
 }
 
 function calculatePrice(info: PriceInfo): number {
-  const isMagazine = info.genre?.toLowerCase().includes("magazine");
+  const isMagazine = info.item_type === "magazine";
   const isVintage = info.publication_year && info.publication_year < 1990;
   let base = isMagazine ? 8.0 : 15.0;
   const mul: Record<string, number> = { mint: 1.5, excellent: 1.2, good: 1.0, fair: 0.6, poor: 0.4 };
   base *= mul[(info.condition_assessment || "good").toLowerCase()] || 1.0;
   if (isVintage) base *= 1.3;
-  if (info.series_title) base *= 1.1;
+  if (info.promotional_hook) base *= 1.1;
   return Math.round(base * 100) / 100;
+}
+
+// Stage 2: Deterministic Title Builder (No AI)
+function buildDeterministicTitle(cleaned: {
+  item_type: string;
+  masthead_title: string | null;
+  main_subtitle: string | null;
+  issue_number: string | null;
+  issue_date: string | null;
+  promotional_hook: string | null;
+  included_items: string | null;
+  author: string | null;
+}): string {
+  const MAX_LENGTH = 80;
+  let parts: (string | null)[];
+
+  if (cleaned.item_type === "magazine") {
+    parts = [
+      cleaned.masthead_title,
+      cleaned.main_subtitle,
+      cleaned.issue_number ? `Issue ${cleaned.issue_number}` : null,
+      cleaned.issue_date,
+      cleaned.promotional_hook,
+      cleaned.included_items,
+    ];
+  } else {
+    // book or unknown
+    parts = [
+      cleaned.masthead_title,
+      cleaned.author ? `by ${cleaned.author}` : null,
+      cleaned.promotional_hook,
+    ];
+  }
+
+  // Remove nulls
+  const validParts = parts.filter((p): p is string => p !== null && p.trim() !== "");
+
+  // Join with spaces
+  let title = validParts.join(" ");
+
+  // Remove duplicate words (case-insensitive, preserve first occurrence)
+  const seen = new Set<string>();
+  title = title
+    .split(" ")
+    .filter((word) => {
+      const lower = word.toLowerCase();
+      if (seen.has(lower)) return false;
+      seen.add(lower);
+      return true;
+    })
+    .join(" ");
+
+  // Trim to 80 characters on word boundary
+  if (title.length > MAX_LENGTH) {
+    const words = title.split(" ");
+    let truncated = "";
+    for (const word of words) {
+      const next = truncated ? `${truncated} ${word}` : word;
+      if (next.length <= MAX_LENGTH) {
+        truncated = next;
+      } else {
+        break;
+      }
+    }
+    title = truncated;
+  }
+
+  return title || "Untitled";
 }
 
 // Converts strings like "January 2024" to ISO date format "2024-01-01"
@@ -91,44 +159,39 @@ function parseIssueDateToISO(dateStr: string | null): string | null {
   return null;
 }
 
-const VISION_PROMPT = `Analyze this image and extract information about the book(s), magazine(s), or other items shown.
-Return only JSON, matching this schema exactly (no extra keys):
+const VISION_PROMPT = `Analyze this image and extract ONLY what is visibly printed on the cover. Return STRICT JSON matching this schema exactly (no extra keys):
 {
-  "item_count": number,
-  "is_bundle": boolean,
-  "bundle_title": string|null,
-  "bundle_description": string|null,
-  "individual_titles": string[]|null,
-  "title": string|null,
-  "subtitle": string|null,
-  "author": string|null,
-  "publisher": string|null,
-  "publication_year": number|null,
-  "isbn": string|null,
-  "genre": string|null,
-  "condition_assessment": "mint"|"excellent"|"good"|"fair"|"poor"|null,
-  "issue_number": string|null,
-  "issue_date": string|null,
-  "series_title": string|null,
-  "edition": string|null,
+  "item_type": "magazine" | "book" | "unknown",
+  "masthead_title": string | null,
+  "main_subtitle": string | null,
+  "issue_number": string | null,
+  "issue_date": string | null,
+  "promotional_hook": string | null,
+  "included_items": string | null,
+  "author": string | null,
+  "edition": string | null,
+  "publisher": string | null,
+  "isbn": string | null,
+  "publication_year": number | null,
+  "condition_assessment": "mint" | "excellent" | "good" | "fair" | "poor" | null,
   "confidence_score": number,
-  "ocr_quality": "good"|"fair"|"poor"|"failed",
+  "ocr_quality": "good" | "fair" | "poor" | "failed",
   "all_visible_text": string
 }
 
-IMPORTANT CLASSIFICATION RULES:
-- If you see "Magazine", "Vol.", "Volume", "Issue", "No.", or monthly/quarterly dating, this is likely a MAGAZINE
-- If it has an issue number (like "#52", "Issue 12"), it's likely a MAGAZINE  
-- If it's a periodical publication (monthly, weekly, quarterly), it's a MAGAZINE
-- If it's a standalone book with chapters and ISBN, it's a BOOK
-- For magazines: extract issue_number, issue_date, and series_title carefully
-- For books: focus on title, author, ISBN, and publication details
-
-Other rules:
-- If multiple distinct items: is_bundle=true and fill bundle_* and individual_titles.
-- If single item: is_bundle=false; provide standard single-item fields.
+RULES:
+- Do NOT generate listing titles.
+- Do NOT infer missing authors. If not visible, return null.
+- If a field is not visible on the cover, return null.
+- Extract numeric promotional hooks (e.g., "52 Patterns", "145 Festive Ideas").
+- Focus on the LARGEST title text for masthead_title.
+- Ignore UI elements, watermarks, and background.
+- "included_items" = any "Plus:", "Includes:", "Inside:" text visible on cover.
+- "promotional_hook" = numeric hooks, taglines, or feature callouts on the cover.
+- If you see "Magazine", "Vol.", "Volume", "Issue", "No.", or monthly/quarterly dating → item_type = "magazine".
+- If it has an ISBN and chapters → item_type = "book".
 - confidence_score in [0,1].
-- Be very careful to distinguish between magazines and books based on visual cues`;
+Return JSON only.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: CORS });
@@ -442,30 +505,19 @@ serve(async (req) => {
     }
 
     const cleaned = {
-      item_count: toIntOrNull(extracted.item_count) ?? 1,
-      is_bundle: Boolean(extracted.is_bundle),
-      bundle_title: cleanStr(extracted.bundle_title as string | undefined),
-      bundle_description: cleanStr(extracted.bundle_description as string | undefined),
-      individual_titles: Array.isArray(extracted.individual_titles)
-        ? (extracted.individual_titles as unknown[]).map(String)
-        : null,
-      title: cleanStr(extracted.title as string | undefined),
-      subtitle: cleanStr(extracted.subtitle as string | undefined),
-      author:
-        cleanStr(extracted.author as string | undefined) ||
-        (extracted.is_bundle ? "Various" : null),
-      publisher:
-      cleanStr(extracted.publisher as string | undefined) ||
-        (extracted.is_bundle ? "Various" : null),
+      item_type: cleanStr(extracted.item_type as string | undefined) || "unknown",
+      masthead_title: cleanStr(extracted.masthead_title as string | undefined),
+      main_subtitle: cleanStr(extracted.main_subtitle as string | undefined),
+      author: cleanStr(extracted.author as string | undefined) || null,
+      publisher: cleanStr(extracted.publisher as string | undefined) || null,
       publication_year: toIntOrNull(extracted.publication_year),
       isbn: digitsOnly(extracted.isbn as string | undefined),
-      genre: cleanStr(extracted.genre as string | undefined) || "book",
       condition_assessment:
-        cleanStr(extracted.condition_assessment as string | undefined) ||
-        "good",
+        cleanStr(extracted.condition_assessment as string | undefined) || "good",
       issue_number: cleanStr(extracted.issue_number as string | undefined),
       issue_date: cleanStr(extracted.issue_date as string | undefined),
-      series_title: cleanStr(extracted.series_title as string | undefined),
+      promotional_hook: cleanStr(extracted.promotional_hook as string | undefined),
+      included_items: cleanStr(extracted.included_items as string | undefined),
       edition: cleanStr(extracted.edition as string | undefined),
       confidence_score: Math.max(
         0.1,
@@ -505,29 +557,34 @@ serve(async (req) => {
 
     // 2) Upsert inventory_items with proper category classification
     // PRIORITY: User-selected type > Auto-detection from OCR
-    const autoDetectedCategory = (cleaned.genre?.toLowerCase().includes("magazine") || cleaned.issue_number) ? "magazine" : "book";
+    const autoDetectedCategory = cleaned.item_type === "magazine" ? "magazine" : "book";
     const suggested_category = userSelectedItemType === 'bundle' ? 'book' : (userSelectedItemType || autoDetectedCategory);
     console.log(`Category classification: userSelected=${userSelectedItemType}, autoDetected=${autoDetectedCategory}, final=${suggested_category}`);
+    
+    // Stage 2: Build deterministic title from extracted fields
+    const deterministic_title = buildDeterministicTitle(cleaned);
+    console.log(`Deterministic title: "${deterministic_title}"`);
     
     const { data: inventoryItem, error: dbErr } = await supabase
       .from("inventory_items")
       .upsert({
         user_id: userId,
         photo_id: photoId,
-        title: cleaned.title,
-        subtitle: cleaned.subtitle,
+        title: cleaned.masthead_title,
+        subtitle: cleaned.main_subtitle,
+        suggested_title: deterministic_title,
         author: cleaned.author,
         publisher: cleaned.publisher,
         publication_year: cleaned.publication_year,
         isbn: cleaned.isbn,
-        genre: cleaned.genre,
+        genre: cleaned.item_type,
         condition_assessment: cleaned.condition_assessment,
         suggested_price,
         suggested_category,
         confidence_score: cleaned.confidence_score,
         issue_number: cleaned.issue_number,
         issue_date: parseIssueDateToISO(cleaned.issue_date),
-        series_title: cleaned.series_title,
+        series_title: null,
         edition: cleaned.edition,
         status: "processed",
         extracted_text: content,
@@ -552,7 +609,7 @@ serve(async (req) => {
     const itemType = userSelectedItemType === 'bundle' ? 'book' : (userSelectedItemType || autoDetectedCategory);
     const itemData = {
       user_id: userId,
-      title: cleaned.title || "Untitled",
+      title: deterministic_title,
       type: itemType,
       status: "processed",
       suggested_price,
@@ -614,16 +671,19 @@ serve(async (req) => {
         const { data: optimizeResult, error: optimizeError } = await supabase.functions.invoke('generate-ebay-listing', {
           body: {
             itemData: {
-              title: cleaned.title,
+              title: cleaned.masthead_title,
               author: cleaned.author,
               publisher: cleaned.publisher,
               publication_year: cleaned.publication_year,
               condition: cleaned.condition_assessment,
               category: suggested_category,
               isbn: cleaned.isbn,
-              genre: cleaned.genre,
+              genre: cleaned.item_type,
               issue_number: cleaned.issue_number,
-              issue_date: cleaned.issue_date
+              issue_date: cleaned.issue_date,
+              issue_title: cleaned.main_subtitle,
+              promotional_hook: cleaned.promotional_hook,
+              included_items: cleaned.included_items,
             },
             userId: userId
           }
