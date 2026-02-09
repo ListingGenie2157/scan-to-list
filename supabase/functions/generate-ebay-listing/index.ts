@@ -11,18 +11,15 @@ const corsHeaders = {
 // Convert ALL CAPS or inconsistent casing to proper Title Case
 function toTitleCase(str: string): string {
   if (!str) return '';
-  // Handle ALL CAPS strings - convert to lowercase first
   if (str === str.toUpperCase() && str.length > 3) {
     str = str.toLowerCase();
   }
-  // Minor words to keep lowercase (unless first word)
   const minorWords = ['a', 'an', 'and', 'as', 'at', 'but', 'by', 'for', 'in', 'nor', 'of', 'on', 'or', 'so', 'the', 'to', 'up', 'yet'];
   
   return str
     .split(' ')
     .map((word, index) => {
       const lower = word.toLowerCase();
-      // First word or not a minor word: capitalize
       if (index === 0 || !minorWords.includes(lower)) {
         return lower.charAt(0).toUpperCase() + lower.slice(1);
       }
@@ -39,13 +36,10 @@ function formatMonthYear(dateStr: string | null, year?: number | null): string |
                       'July', 'August', 'September', 'October', 'November', 'December'];
   
   if (dateStr) {
-    // If it's already a human-readable format like "January 2024", return it
     const monthYearMatch = dateStr.match(/([a-zA-Z]+)\s*(\d{4})/i);
     if (monthYearMatch) {
       return `${toTitleCase(monthYearMatch[1])} ${monthYearMatch[2]}`;
     }
-    
-    // If it's ISO format "2024-01-01", convert to "January 2024"
     const isoMatch = dateStr.match(/(\d{4})-(\d{2})/);
     if (isoMatch) {
       const monthIndex = parseInt(isoMatch[2], 10) - 1;
@@ -55,26 +49,34 @@ function formatMonthYear(dateStr: string | null, year?: number | null): string |
     }
   }
   
-  // Fallback to just year
   if (year) return year.toString();
   return null;
 }
 
-// Magazine title template builder - creates structured, SEO-optimized titles
+// Magazine title template builder - uses user preferences instead of hardcoded keywords
 function buildMagazineTitle(itemData: ItemInfo, userPrefs?: UserPreferences): string {
   const MAX_LENGTH = 80;
   const parts: string[] = [];
   
   console.log('Building magazine title with data:', JSON.stringify(itemData));
+  console.log('User preferences:', JSON.stringify(userPrefs));
   
-  // 1. Always start with "New"
-  parts.push("New");
+  // 1. Add user-selected prefix keywords (e.g., "New", "Vintage") - only if user chose them
+  if (userPrefs?.title_keywords?.length) {
+    // Add the first keyword that fits as a leading descriptor
+    parts.push(userPrefs.title_keywords[0]);
+  }
   
-  // 2. Publication name + Magazine (ensure "Magazine" is always included)
+  // 2. Add custom prefixes
+  if (userPrefs?.title_prefixes?.length) {
+    for (const prefix of userPrefs.title_prefixes) {
+      parts.push(prefix);
+    }
+  }
+  
+  // 3. Publication name + Magazine
   let pubName = toTitleCase(itemData.title || '');
-  // Remove "magazine" if already in the title to avoid duplication
   pubName = pubName.replace(/\s*magazine\s*/i, ' ').trim();
-  // Also clean up common patterns like "- " at the end
   pubName = pubName.replace(/[-–—]\s*$/, '').trim();
   
   if (pubName) {
@@ -83,7 +85,7 @@ function buildMagazineTitle(itemData: ItemInfo, userPrefs?: UserPreferences): st
     parts.push("Magazine");
   }
   
-  // 3. Issue title (if available and different from publication name)
+  // 4. Issue title
   if (itemData.issue_title) {
     const issueTitle = toTitleCase(itemData.issue_title);
     if (issueTitle.toLowerCase() !== pubName.toLowerCase()) {
@@ -91,37 +93,47 @@ function buildMagazineTitle(itemData: ItemInfo, userPrefs?: UserPreferences): st
     }
   }
   
-  // 4. Issue number
+  // 5. Issue number
   if (itemData.issue_number) {
-    // Clean up issue number - remove leading zeros, handle "Issue X" format
     const cleanIssue = itemData.issue_number.replace(/^0+/, '').replace(/issue\s*/i, '');
     if (cleanIssue) {
       parts.push(`#${cleanIssue}`);
     }
   }
   
-  // 5. Format issue date (month/year) - use human readable format
+  // 6. Format issue date
   const formattedDate = formatMonthYear(itemData.issue_date, itemData.publication_year);
   if (formattedDate) {
     parts.push(formattedDate);
   }
   
-  // 5. Build initial title and check length
   let title = parts.join(' ');
   
-  // 6. Add SEO keywords if there's room
-  const seoKeywords = ['Vintage', 'Collectible', 'Rare', 'Classic', 'Original', 'Print'];
-  
-  for (const keyword of seoKeywords) {
-    const potentialTitle = `${title} ${keyword}`;
-    if (potentialTitle.length <= MAX_LENGTH) {
-      title = potentialTitle;
-    } else {
-      break;
+  // 7. Add remaining user-selected condition keywords (skip first, already used)
+  if (userPrefs?.title_keywords && userPrefs.title_keywords.length > 1) {
+    for (let i = 1; i < userPrefs.title_keywords.length; i++) {
+      const potentialTitle = `${title} ${userPrefs.title_keywords[i]}`;
+      if (potentialTitle.length <= MAX_LENGTH) {
+        title = potentialTitle;
+      } else {
+        break;
+      }
     }
   }
   
-  // 7. Apply user preferences if available and there's room
+  // 8. Add user-selected shipping keywords
+  if (userPrefs?.shipping_keywords?.length) {
+    for (const kw of userPrefs.shipping_keywords) {
+      const potentialTitle = `${title} ${kw}`;
+      if (potentialTitle.length <= MAX_LENGTH) {
+        title = potentialTitle;
+      } else {
+        break;
+      }
+    }
+  }
+  
+  // 9. Add custom suffixes
   if (userPrefs?.title_suffixes?.length) {
     for (const suffix of userPrefs.title_suffixes) {
       const potentialTitle = `${title} ${suffix}`;
@@ -132,7 +144,7 @@ function buildMagazineTitle(itemData: ItemInfo, userPrefs?: UserPreferences): st
     }
   }
   
-  // 8. Smart truncation if still over limit
+  // 10. Smart truncation if over limit
   if (title.length > MAX_LENGTH) {
     const words = title.split(' ');
     let truncated = '';
@@ -154,6 +166,8 @@ interface UserPreferences {
   title_prefixes?: string[];
   title_suffixes?: string[];
   custom_title_text?: string;
+  title_keywords?: string[];
+  shipping_keywords?: string[];
 }
 
 serve(async (req) => {
@@ -168,7 +182,7 @@ serve(async (req) => {
       throw new Error('Item data is required');
     }
 
-    const { title, author, publisher, publication_year, condition, category, isbn, genre, issue_number, issue_date, issue_title } = itemData;
+    const { title, author, publisher, publication_year, condition, category, isbn, genre, issue_number, issue_date, issue_title, topic } = itemData;
 
     // Get user preferences for title additions
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -180,13 +194,13 @@ serve(async (req) => {
     if (userId) {
       const { data } = await supabase
         .from('user_profiles')
-        .select('title_prefixes, title_suffixes, custom_title_text')
+        .select('title_prefixes, title_suffixes, custom_title_text, title_keywords, shipping_keywords')
         .eq('id', userId)
         .maybeSingle();
       userPreferences = data;
     }
 
-    // Detect if this is a magazine - improved detection
+    // Detect if this is a magazine
     const isMagazine = 
       genre?.toLowerCase().includes('magazine') || 
       category?.toLowerCase().includes('magazine') || 
@@ -202,7 +216,6 @@ serve(async (req) => {
     let descriptionPrompt: string;
     
     if (isMagazine) {
-      // For magazines: Use template-based title generation (not AI)
       optimizedTitle = buildMagazineTitle(
         { title, issue_title, issue_number, issue_date, publication_year },
         userPreferences || undefined
@@ -210,7 +223,6 @@ serve(async (req) => {
       
       console.log('Generated magazine title:', optimizedTitle);
       
-      // AI generates description only for magazines
       descriptionPrompt = `Create a compelling eBay description (200-300 words) for this magazine:
 
 Magazine: ${title || 'Unknown'}
@@ -219,18 +231,41 @@ Issue Number: ${issue_number || 'Unknown'}
 Issue Date: ${issue_date || 'Unknown'}
 Year: ${publication_year || 'Unknown'}
 Condition: ${condition || 'Good'}
+Genre: ${genre || 'Not specified'}
+Topic: ${topic || 'Not specified'}
 
 The description should:
 - Highlight key selling points and any special features (cover stories, interviews, notable articles)
 - Include condition details
-- Use relevant keywords for eBay search (vintage, collectible, rare, etc.)
+- Use relevant keywords for eBay search
 - Have a professional, trustworthy tone
 - Appeal to magazine collectors and enthusiasts
 - Mention that shipping and handling will be done carefully
 
 Respond with ONLY the description text, no JSON or formatting.`;
     } else {
-      // For non-magazines: Use AI for both title and description
+      // Build keyword instructions based on user preferences
+      const keywordInstructions = [];
+      if (userPreferences?.title_keywords?.length) {
+        keywordInstructions.push(`- MUST include these condition keywords: ${userPreferences.title_keywords.join(', ')}`);
+      }
+      if (userPreferences?.shipping_keywords?.length) {
+        keywordInstructions.push(`- MUST include these shipping keywords: ${userPreferences.shipping_keywords.join(', ')}`);
+      }
+      if (userPreferences?.title_prefixes?.length) {
+        keywordInstructions.push(`- MUST include these prefixes: ${userPreferences.title_prefixes.join(', ')}`);
+      }
+      if (userPreferences?.title_suffixes?.length) {
+        keywordInstructions.push(`- MUST include these suffixes: ${userPreferences.title_suffixes.join(', ')}`);
+      }
+      if (userPreferences?.custom_title_text) {
+        keywordInstructions.push(`- MUST include this text: "${userPreferences.custom_title_text}"`);
+      }
+      // If no keywords selected, tell AI not to add filler keywords
+      if (!userPreferences?.title_keywords?.length) {
+        keywordInstructions.push(`- Do NOT add condition descriptors like "New", "Vintage", "Rare", "Collectible" unless they are factually accurate for this specific item`);
+      }
+
       const fullPrompt = `Create an SEO-optimized eBay listing for this item:
 
 Title: ${title || 'Unknown'}
@@ -241,6 +276,7 @@ Condition: ${condition || 'Good'}
 Category: ${category || 'Book'}
 ISBN: ${isbn || 'Not available'}
 Genre: ${genre || 'Unknown'}
+Topic: ${topic || 'Not specified'}
 
 Please generate:
 1. An eBay title that is EXACTLY 80 characters or less (prefer 76-80) that includes:
@@ -248,9 +284,7 @@ Please generate:
    - Include key descriptive terms
    - Use relevant keywords that collectors and buyers search for
    - Include condition if space allows
-   ${userPreferences?.title_prefixes?.length ? `- MUST include these prefixes: ${userPreferences.title_prefixes.join(', ')}` : ''}
-   ${userPreferences?.title_suffixes?.length ? `- MUST include these suffixes: ${userPreferences.title_suffixes.join(', ')}` : ''}
-   ${userPreferences?.custom_title_text ? `- MUST include this text: "${userPreferences.custom_title_text}"` : ''}
+   ${keywordInstructions.join('\n   ')}
 2. A compelling description (200-300 words) that:
    - Highlights key selling points
    - Includes author credentials and book highlights
@@ -291,7 +325,6 @@ Format your response as JSON with "title" and "description" fields.`;
       const generatedContent = data.choices[0].message.content;
 
       try {
-        // Strip markdown code blocks if present
         let contentToParse = generatedContent;
         if (contentToParse.includes('```json')) {
           contentToParse = contentToParse.replace(/```json\s*/g, '').replace(/```\s*/g, '');
@@ -303,7 +336,6 @@ Format your response as JSON with "title" and "description" fields.`;
         const parsed = JSON.parse(contentToParse);
         optimizedTitle = parsed.title || title || 'Item for Sale';
         
-        // Truncate title if needed
         if (optimizedTitle.length > 80) {
           const words = optimizedTitle.split(' ');
           let truncated = '';
@@ -317,7 +349,6 @@ Format your response as JSON with "title" and "description" fields.`;
           optimizedTitle = truncated;
         }
         
-        // Return early for non-magazines
         const marketPrice = await getMarketBasedPricing(itemData);
         return new Response(JSON.stringify({ 
           success: true,
@@ -364,7 +395,6 @@ Format your response as JSON with "title" and "description" fields.`;
     const descData = await descResponse.json();
     const generatedDescription = descData.choices[0].message.content;
 
-    // Generate market-based pricing
     const marketPrice = await getMarketBasedPricing(itemData);
 
     return new Response(JSON.stringify({ 
@@ -389,7 +419,7 @@ Format your response as JSON with "title" and "description" fields.`;
     });
   }
 });
-// Function to get market-based pricing using the ebay-app-search edge function
+
 interface ItemInfo {
   title?: string;
   author?: string;
@@ -400,13 +430,13 @@ interface ItemInfo {
   issue_title?: string;
   issue_number?: string;
   issue_date?: string;
+  topic?: string;
 }
 
 async function getMarketBasedPricing(itemData: ItemInfo): Promise<number | null> {
   const { title, author, isbn } = itemData;
   
   try {
-    // Create search query for eBay pricing function
     let searchQuery = '';
     if (isbn) {
       searchQuery = isbn;
@@ -419,7 +449,6 @@ async function getMarketBasedPricing(itemData: ItemInfo): Promise<number | null>
       return null;
     }
 
-    // Call the ebay-app-search edge function using Supabase client
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -451,14 +480,12 @@ async function getMarketBasedPricing(itemData: ItemInfo): Promise<number | null>
   }
 }
 
-// Fallback pricing function
 function calculateFallbackPrice(itemData: ItemInfo): number {
   const { condition, category, publication_year } = itemData;
   const isMagazine = category?.toLowerCase().includes('magazine');
   
   let basePrice = isMagazine ? 8.0 : 15.0;
   
-  // Condition multipliers
   const conditionMultiplier = {
     'new': 1.5,
     'like-new': 1.3,
@@ -469,16 +496,13 @@ function calculateFallbackPrice(itemData: ItemInfo): number {
   
   basePrice *= conditionMultiplier[condition] || 1.0;
   
-  // Age adjustment for books
   if (!isMagazine && publication_year) {
     const currentYear = new Date().getFullYear();
     const age = currentYear - publication_year;
     if (age > 20) {
-      basePrice *= 1.2; // Vintage books may be worth more
+      basePrice *= 1.2;
     }
   }
   
   return Math.round(basePrice * 100) / 100;
 }
-
-// Removed old eBay API functions - now using ebay-app-search edge function

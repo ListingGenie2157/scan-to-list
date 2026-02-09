@@ -33,4 +33,5 @@ export interface InventoryItem {
   description?: string | null;
   photo_id?: string | number | null;
   subtitle?: string | null;
+  topic?: string | null;
 }
