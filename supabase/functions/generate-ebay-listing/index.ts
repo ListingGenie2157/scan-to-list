@@ -1,4 +1,4 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
+// XHR polyfill removed - not needed for fetch-based calls
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -53,113 +53,66 @@ function formatMonthYear(dateStr: string | null, year?: number | null): string |
   return null;
 }
 
-// Magazine title template builder - uses user preferences instead of hardcoded keywords
+// Deterministic magazine title builder - no AI, no creative rewriting
 function buildMagazineTitle(itemData: ItemInfo, userPrefs?: UserPreferences): string {
   const MAX_LENGTH = 80;
-  const parts: string[] = [];
-  
-  console.log('Building magazine title with data:', JSON.stringify(itemData));
-  console.log('User preferences:', JSON.stringify(userPrefs));
-  
-  // 1. Add user-selected prefix keywords (e.g., "New", "Vintage") - only if user chose them
-  if (userPrefs?.title_keywords?.length) {
-    // Add the first keyword that fits as a leading descriptor
-    parts.push(userPrefs.title_keywords[0]);
-  }
-  
-  // 2. Add custom prefixes
-  if (userPrefs?.title_prefixes?.length) {
-    for (const prefix of userPrefs.title_prefixes) {
-      parts.push(prefix);
+
+  // Build parts in priority order
+  const parts: (string | null)[] = [
+    itemData.title ? toTitleCase(itemData.title.replace(/\s*magazine\s*/i, ' ').trim()) + ' Magazine' : 'Magazine',
+    itemData.issue_title ? toTitleCase(itemData.issue_title) : null,
+    itemData.issue_number ? `Issue ${itemData.issue_number.replace(/^0+/, '').replace(/issue\s*/i, '')}` : null,
+    formatMonthYear(itemData.issue_date, itemData.publication_year),
+    itemData.promotional_hook || null,
+    itemData.included_items || null,
+  ];
+
+  // Remove nulls and empty strings
+  const validParts = parts.filter((p): p is string => p !== null && p.trim() !== '');
+
+  // Join, remove duplicate words
+  const seen = new Set<string>();
+  let title = validParts
+    .join(' ')
+    .split(' ')
+    .filter((word) => {
+      const lower = word.toLowerCase();
+      if (seen.has(lower)) return false;
+      seen.add(lower);
+      return true;
+    })
+    .join(' ');
+
+  // Append user preference keywords if they fit
+  const extras = [
+    ...(userPrefs?.title_keywords || []),
+    ...(userPrefs?.shipping_keywords || []),
+  ];
+  for (const kw of extras) {
+    const next = `${title} ${kw}`;
+    if (next.length <= MAX_LENGTH) {
+      title = next;
+    } else {
+      break;
     }
   }
-  
-  // 3. Publication name + Magazine
-  let pubName = toTitleCase(itemData.title || '');
-  pubName = pubName.replace(/\s*magazine\s*/i, ' ').trim();
-  pubName = pubName.replace(/[-–—]\s*$/, '').trim();
-  
-  if (pubName) {
-    parts.push(`${pubName} Magazine`);
-  } else {
-    parts.push("Magazine");
-  }
-  
-  // 4. Issue title
-  if (itemData.issue_title) {
-    const issueTitle = toTitleCase(itemData.issue_title);
-    if (issueTitle.toLowerCase() !== pubName.toLowerCase()) {
-      parts.push(`- ${issueTitle}`);
-    }
-  }
-  
-  // 5. Issue number
-  if (itemData.issue_number) {
-    const cleanIssue = itemData.issue_number.replace(/^0+/, '').replace(/issue\s*/i, '');
-    if (cleanIssue) {
-      parts.push(`#${cleanIssue}`);
-    }
-  }
-  
-  // 6. Format issue date
-  const formattedDate = formatMonthYear(itemData.issue_date, itemData.publication_year);
-  if (formattedDate) {
-    parts.push(formattedDate);
-  }
-  
-  let title = parts.join(' ');
-  
-  // 7. Add remaining user-selected condition keywords (skip first, already used)
-  if (userPrefs?.title_keywords && userPrefs.title_keywords.length > 1) {
-    for (let i = 1; i < userPrefs.title_keywords.length; i++) {
-      const potentialTitle = `${title} ${userPrefs.title_keywords[i]}`;
-      if (potentialTitle.length <= MAX_LENGTH) {
-        title = potentialTitle;
-      } else {
-        break;
-      }
-    }
-  }
-  
-  // 8. Add user-selected shipping keywords
-  if (userPrefs?.shipping_keywords?.length) {
-    for (const kw of userPrefs.shipping_keywords) {
-      const potentialTitle = `${title} ${kw}`;
-      if (potentialTitle.length <= MAX_LENGTH) {
-        title = potentialTitle;
-      } else {
-        break;
-      }
-    }
-  }
-  
-  // 9. Add custom suffixes
-  if (userPrefs?.title_suffixes?.length) {
-    for (const suffix of userPrefs.title_suffixes) {
-      const potentialTitle = `${title} ${suffix}`;
-      if (potentialTitle.length <= MAX_LENGTH) {
-        title = potentialTitle;
-        break;
-      }
-    }
-  }
-  
-  // 10. Smart truncation if over limit
+
+  // Truncate on word boundary
   if (title.length > MAX_LENGTH) {
     const words = title.split(' ');
     let truncated = '';
     for (const word of words) {
-      const nextTruncated = truncated ? `${truncated} ${word}` : word;
-      if (nextTruncated.length <= MAX_LENGTH) {
-        truncated = nextTruncated;
+      const next = truncated ? `${truncated} ${word}` : word;
+      if (next.length <= MAX_LENGTH) {
+        truncated = next;
       } else {
         break;
       }
     }
     title = truncated;
   }
-  
-  return title;
+
+  return title || 'Magazine';
 }
 
 interface UserPreferences {
@@ -182,7 +135,7 @@ serve(async (req) => {
       throw new Error('Item data is required');
     }
 
-    const { title, author, publisher, publication_year, condition, category, isbn, genre, issue_number, issue_date, issue_title, topic } = itemData;
+    const { title, author, publisher, publication_year, condition, category, isbn, genre, issue_number, issue_date, issue_title, topic, promotional_hook, included_items } = itemData;
 
     // Get user preferences for title additions
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
@@ -217,7 +170,7 @@ serve(async (req) => {
     
     if (isMagazine) {
       optimizedTitle = buildMagazineTitle(
-        { title, issue_title, issue_number, issue_date, publication_year },
+        { title, issue_title, issue_number, issue_date, publication_year, promotional_hook, included_items },
         userPreferences || undefined
       );
       
@@ -431,6 +384,8 @@ interface ItemInfo {
   issue_number?: string;
   issue_date?: string;
   topic?: string;
+  promotional_hook?: string;
+  included_items?: string;
 }
 
 async function getMarketBasedPricing(itemData: ItemInfo): Promise<number | null> {
