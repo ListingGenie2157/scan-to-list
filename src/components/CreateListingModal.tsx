@@ -415,11 +415,9 @@ export function CreateListingModal({ item, open, onOpenChange }: CreateListingMo
                 required
                 maxLength={80}
               />
-              {listingData.category === 'magazine' && (
-                <p className="text-xs text-muted-foreground">
-                  Magazine titles start with "New" and include "Magazine" after the publication name.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                Titles are built from cover text + your keyword preferences. Use the ⚙️ button to configure.
+              </p>
             </div>
 
             <div className="space-y-2">
