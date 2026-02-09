@@ -561,9 +561,39 @@ serve(async (req) => {
     const suggested_category = userSelectedItemType === 'bundle' ? 'book' : (userSelectedItemType || autoDetectedCategory);
     console.log(`Category classification: userSelected=${userSelectedItemType}, autoDetected=${autoDetectedCategory}, final=${suggested_category}`);
     
-    // Stage 2: Build deterministic title from extracted fields
-    const deterministic_title = buildDeterministicTitle(cleaned);
-    console.log(`Deterministic title: "${deterministic_title}"`);
+    // Fetch user preferences for title keywords
+    let userPrefs: { title_keywords?: string[]; shipping_keywords?: string[]; title_prefixes?: string[]; title_suffixes?: string[] } | null = null;
+    try {
+      const { data: prefsData } = await supabase
+        .from("user_profiles")
+        .select("title_keywords, shipping_keywords, title_prefixes, title_suffixes")
+        .eq("id", userId)
+        .maybeSingle();
+      userPrefs = prefsData;
+    } catch (e) {
+      console.warn("Failed to fetch user preferences:", e);
+    }
+
+    // Stage 2: Build deterministic title from extracted fields + user keywords
+    let deterministic_title = buildDeterministicTitle(cleaned);
+    
+    // Append user-selected keywords if they fit within 80 chars
+    const MAX_TITLE = 80;
+    const extras = [
+      ...(userPrefs?.title_prefixes || []),
+      ...(userPrefs?.title_keywords || []),
+      ...(userPrefs?.shipping_keywords || []),
+      ...(userPrefs?.title_suffixes || []),
+    ];
+    for (const kw of extras) {
+      const next = `${deterministic_title} ${kw}`;
+      if (next.length <= MAX_TITLE) {
+        deterministic_title = next;
+      } else {
+        break;
+      }
+    }
+    console.log(`Deterministic title (with prefs): "${deterministic_title}"`);
     
     const { data: inventoryItem, error: dbErr } = await supabase
       .from("inventory_items")
