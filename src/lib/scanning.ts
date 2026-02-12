@@ -15,6 +15,11 @@ export type LookupMeta = {
   description?: string | null;
   categories?: string[] | null;
   suggested_price?: number | null;
+  // inferred fields for magazines (from EAN add-ons)
+  inferred_month?: string | null;
+  inferred_year?: string | null;
+  inferred_issue?: string | null;
+  // explicit magazine fields provided by UI
   // Additional magazine-specific fields
   inferred_month?: string | null;
   inferred_year?: string | null;
@@ -46,6 +51,12 @@ export function normalizeScan(raw: string): string | null {
   const s = String(raw).trim();
   let digits = s.replace(/[^0-9Xx]/g, "");
 
+  // Preserve EAN add-ons for downstream disambiguation (book/magazine)
+  if (digits.length === 18 && (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977"))) {
+    return digits; // EAN-13 + EAN-5 addon
+  }
+  if (digits.length === 15 && (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977"))) {
+    return digits; // EAN-13 + EAN-2 addon
   // EAN-13 + EAN-5 addon (18 digits) -> for magazines (977 prefix), preserve add-on
   if (digits.length === 18 && digits.startsWith("977")) {
     return digits; // Keep full barcode with add-on for magazines
@@ -68,6 +79,9 @@ export function normalizeScan(raw: string): string | null {
     digits = isbn10to13(digits.toUpperCase());
   }
 
+  // Accept EAN-13 (books 978/979 and magazines 977)
+  if (digits.length === 13 && (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977"))) {
+    return digits;
   // Accept EAN-13 for books and magazines
   if (digits.length === 13) {
     if (digits.startsWith("978") || digits.startsWith("979") || digits.startsWith("977")) {
@@ -75,8 +89,7 @@ export function normalizeScan(raw: string): string | null {
     }
   }
 
-  // Accept 12-digit UPC codes (e.g., magazines) by returning the digits as-is. 
-  // Caller can decide how to handle these codes (e.g., treat as product UPC).
+  // Accept 12-digit UPC codes
   if (digits.length === 12) {
     return digits;
   }
@@ -178,9 +191,23 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
     
     return existing.id as unknown as number;
   } else {
+
+    // Build a composed title for magazines: Publication - Issue Title - Issue X - Month Year
+    let composedTitle: string | null = null;
+    if (finalType === 'magazine') {
+      const publicationName = meta.title || '';
+      const issueTitle = meta.issue_title || '';
+      const issueNum = meta.issue_number || meta.inferred_issue || '';
+      const monthYear = meta.issue_date || (meta.inferred_month && meta.inferred_year ? `${meta.inferred_month} ${meta.inferred_year}` : (meta.inferred_year || '')) || '';
+      const parts = [publicationName, issueTitle, issueNum ? `Issue ${issueNum}` : '', monthYear].filter(Boolean);
+      composedTitle = parts.join(' - ') || null;
+    }
+
+    const insertData: any = {
     const insertData: ItemData = {
       user_id: user.id,
       type: finalType,
+      title: finalType === 'magazine' ? (composedTitle ?? (meta.title ?? null)) : (meta.title ?? null),
       title: composedTitle ?? null,
       publisher: meta.publisher ?? null,
       authors: meta.authors ?? null,
@@ -209,6 +236,34 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
       .single();
     if (insErr) throw insErr;
     const newId = inserted!.id as number;
+    let newInventoryId: string | undefined = undefined;
+    // Also create an inventory_items entry for magazines with disambiguation details
+    if (finalType === 'magazine') {
+      const issueDate = meta.issue_date || (
+        meta.inferred_month && meta.inferred_year ? `${meta.inferred_month} ${meta.inferred_year}` : (meta.inferred_year || null)
+      );
+      const { data: inv, error: invErr } = await supabase
+        .from('inventory_items')
+        .insert({
+          user_id: user.id,
+          // Publication name in title, issue title in subtitle
+          title: meta.title ?? null,
+          subtitle: meta.issue_title ?? null,
+          issue_number: meta.issue_number ?? meta.inferred_issue ?? null,
+          issue_date: issueDate,
+          publication_year: meta.year ? parseInt(meta.year, 10) || null : (meta.inferred_year ? parseInt(meta.inferred_year, 10) || null : null),
+          isbn: meta.barcode ?? null,
+          suggested_category: 'magazine',
+          suggested_price: meta.suggested_price ?? null,
+          suggested_title: composedTitle ?? null,
+          status: 'processed',
+        })
+        .select()
+        .single();
+      if (!invErr) newInventoryId = inv?.id as string | undefined;
+    }
+
+    await maybeGenerateAndSavePrice(newId, meta, newInventoryId);
     
     // Sync to inventory_items table
     await syncToInventoryItems(newId, insertData, user.id);
@@ -218,6 +273,8 @@ export async function upsertItem(meta: NonNullable<LookupMeta>, userItemType?: '
   }
 }
 
+async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<LookupMeta>, inventoryItemId?: string) {
+async function syncToInventoryItems(itemId: number, itemData: any, userId: string) {
 async function syncToInventoryItems(itemId: number, itemData: ItemData, userId: string) {
   try {
     // Sync to inventory_items table for dual table management
@@ -299,6 +356,9 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
     }
     if (typeof suggestedPrice === 'number' && isFinite(suggestedPrice)) {
       await supabase.from('items').update({ suggested_price: suggestedPrice }).eq('id', itemId);
+      if (inventoryItemId) {
+        await supabase.from('inventory_items').update({ suggested_price: suggestedPrice }).eq('id', inventoryItemId);
+      }
     }
   } catch (e) {
     console.warn('Price generation failed:', e);
@@ -307,6 +367,11 @@ async function maybeGenerateAndSavePrice(itemId: number, meta: NonNullable<Looku
 
 
 export async function storeCover(itemId: number, coverUrl: string, type: 'book' | 'magazine' | 'bundle' = 'book'): Promise<void> {
+  const { error, data } = await supabase.functions.invoke('mirror-cover', {
+    body: { itemId, type, sourceUrl: coverUrl }
+  });
+  if (error) throw error;
+  // optional: could return data for UI
   // Use mirror-cover edge function for simpler cover storage
   const { data, error } = await supabase.functions.invoke('mirror-cover', {
     body: { itemId, coverUrl, type }
